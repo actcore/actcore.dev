@@ -1,0 +1,60 @@
+---
+title: CLI Reference
+description: act-cli command reference.
+---
+
+## act serve
+
+Start an HTTP server for a component.
+
+```bash
+act serve <component.wasm> [options]
+```
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--port` | 3000 | HTTP port |
+| `--host` | `[::1]` | Bind address |
+
+## act mcp
+
+Start an MCP stdio server.
+
+```bash
+act mcp <component.wasm>
+```
+
+Reads JSON-RPC from stdin, writes to stdout. Use with Claude Desktop, Cursor, or any MCP client.
+
+## act call
+
+Call a tool directly.
+
+```bash
+act call <component.wasm> <tool-name> [options]
+```
+
+| Option | Description |
+|--------|-------------|
+| `--args <json>` | Tool arguments as JSON |
+| `--metadata <json>` | Metadata key-value pairs as JSON |
+
+```bash
+act call my-tools.wasm search --args '{"query": "rust wasm"}'
+```
+
+## act tools
+
+List available tools in a component.
+
+```bash
+act tools <component.wasm>
+```
+
+## act info
+
+Show component metadata. Reads the `act:component` custom section without instantiating the component.
+
+```bash
+act info <component.wasm>
+```

@@ -1,0 +1,82 @@
+---
+title: Introduction
+description: ACT (Agent Component Tools) — universal tool components built on WebAssembly Component Model.
+---
+
+**ACT** (Agent Component Tools) is a self-documenting RPC protocol built on the [WebAssembly Component Model](https://component-model.bytecodealliance.org/).
+
+A single `.wasm` component serves all consumers:
+- **AI agents** — via MCP adapter
+- **Applications** — via HTTP + JSON/CBOR
+- **CLI users** — via `act call`
+- **Browsers** — via jco transpilation
+
+## Why ACT?
+
+| Problem | ACT Solution |
+|---------|-------------|
+| npm/pip install + native deps | Single `.wasm` file, zero dependencies |
+| Works on my machine | Deterministic binary, same SHA256 everywhere |
+| Full OS access by default | WASM sandbox with explicit capability grants |
+| Only serves MCP agents | One component serves agents, apps, CLI, browsers |
+
+## Core Concepts
+
+- **Component** — a `.wasm` file exporting the `act-world` world
+- **Tool** — a named callable function exposed via the `tool-provider` interface
+- **Transport Adapter** — translates MCP, HTTP, or other protocols to ACT host calls
+- **Metadata** — per-call context passed through the host (auth, tracing, config)
+
+## Quick Example
+
+```rust
+use act_sdk::prelude::*;
+
+#[act_component]
+struct MyTools;
+
+#[act_tool(description = "Encode text as base64")]
+fn base64_encode(input: String) -> String {
+    use base64::Engine;
+    base64::engine::general_purpose::STANDARD.encode(input)
+}
+```
+
+```bash
+# Build
+cargo build --target wasm32-wasip2 --release
+
+# Serve over MCP (for AI agents)
+act mcp my-tools.wasm
+
+# Serve over HTTP (for apps)
+act serve my-tools.wasm
+
+# Call directly
+act call my-tools.wasm base64_encode --args '{"input": "hello"}'
+```
+
+## WIT Interface
+
+ACT components implement `act:core@0.2.0`:
+
+```wit
+interface tool-provider {
+    get-metadata-schema: async func(metadata: metadata)
+        -> option<string>;
+
+    list-tools: async func(metadata: metadata)
+        -> result<list-tools-response, tool-error>;
+
+    call-tool: async func(call: tool-call)
+        -> stream<stream-event>;
+}
+```
+
+Component info is stored in a WASM custom section (`act:component`, CBOR-encoded), not an exported function.
+
+## Next Steps
+
+- [Install act-cli](/docs/getting-started/installation/) to start building
+- [Create your first component](/docs/getting-started/first-component/)
+- [Learn the architecture](/docs/concepts/overview/)
