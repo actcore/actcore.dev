@@ -18,9 +18,10 @@ build tooling on your laptop just to run a 200-line utility.
 
 You compile the tool **once**, as a WebAssembly component. You get a
 single `.wasm` file. That file runs on Linux x86_64, macOS arm64,
-Windows, Raspberry Pi, inside a browser tab, inside a serverless
-runtime. Same bytes. Same SHA256. No per-platform wheels, no native
-shims, no build toolchain required on anyone's machine but yours.
+Windows, Android, Raspberry Pi, inside a browser tab, inside a
+serverless runtime. Same bytes. Same SHA256. No per-platform wheels,
+no native shims, no build toolchain required on anyone's machine but
+yours.
 
 ## Distribution, for free
 
@@ -59,9 +60,23 @@ utility has the same ambient filesystem and network access as you do.
 Sandboxing native code is possible (firejail, bwrap, cgroups) but
 tedious enough that almost nobody does it for day-to-day tooling.
 
-Every ACT component runs inside WASI's sandbox. Filesystem and
-outbound network are **deny-by-default**. To let a component touch
-anything, two things have to agree:
+ACT components don't run natively. They run inside
+[`wasmtime`](https://wasmtime.dev) — a full WebAssembly VM with a
+JIT, linear-memory isolation, and no direct access to host syscalls.
+The component can't read files, open sockets, or spawn processes on
+its own; the only way out of the VM is through explicit imports the
+host chose to wire up. That's the real isolation boundary — and
+because every target runs the same wasmtime, it's identical on
+Linux, macOS, Windows, and Android.
+
+WASI is the capability-oriented I/O interface layered on top of
+that VM. A component asks for `wasi:filesystem` or `wasi:http`
+imports; the host either provides them, provides a gated proxy, or
+doesn't provide them at all. Everything else stays inside wasmtime.
+
+ACT adds a policy layer on top of the capability imports. Filesystem
+and outbound network are **deny-by-default**. To let a component
+touch anything, two things have to agree:
 
 1. The component's manifest declares what it needs
    (`[std.capabilities."wasi:filesystem"]`, `"wasi:http"`). This is a
@@ -78,8 +93,9 @@ component that tries to phone home to `169.254.169.254` (the
 cloud-metadata IP) fails with a `DnsError` before a socket is ever
 opened.
 
-You get all of this because WASI already gives us the sandbox; ACT's
-contribution is the declaration-plus-ceiling model on top.
+The VM gives us isolation. WASI gives us capability imports. ACT
+gives us the declaration-plus-ceiling model that makes those
+capabilities safe to hand to third-party code.
 
 ## One component, any transport
 
