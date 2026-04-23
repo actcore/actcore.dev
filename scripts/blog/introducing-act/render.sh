@@ -1,43 +1,63 @@
 #!/usr/bin/env bash
-# Record + render the terminal demo for the intro post.
+# Record demo.sh and publish three artifacts:
+#   - public/blog/introducing-act-demo.cast  (served to asciinema-player on actcore.dev)
+#   - public/blog/introducing-act-demo.gif   (fallback for dev.to / RSS / LinkedIn previews)
 #
 # Usage:
-#     ./render.sh               # record & render (writes ../../public/blog/)
-#     ./render.sh --render-only # skip recording, re-render existing demo.cast
+#     ./render.sh               # record & publish
+#     ./render.sh --render-only # skip recording, re-publish from existing demo.cast
 #
-# Requirements (install via your OS package manager or cargo):
-#     asciinema    — https://asciinema.org/
-#     svg-term-cli — npm i -g svg-term-cli (or use npx below)
+# Requirements:
+#     asciinema — https://asciinema.org/ (brew/pipx install asciinema)
+#     agg       — https://github.com/asciinema/agg (cargo install --git … agg
+#                 or download binary release)
 
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
-CAST="${HERE}/demo.cast"
-OUT="${HERE}/../../../public/blog/introducing-act-demo.svg"
-mkdir -p "$(dirname "$OUT")"
+CAST_LOCAL="${HERE}/demo.cast"
+OUT_DIR="${HERE}/../../../public/blog"
+CAST_PUB="${OUT_DIR}/introducing-act-demo.cast"
+GIF_PUB="${OUT_DIR}/introducing-act-demo.gif"
+mkdir -p "$OUT_DIR"
 
 if [[ "${1:-}" != "--render-only" ]]; then
-    # Warm the component cache BEFORE the recording so the cast doesn't
-    # include the OCI pull's progress-bar redraws (dozens of \r frames
-    # that dominate the rendered SVG). The visible demo then hits the
-    # local cache in ~150 ms.
     : "${ACT:=npx -y @actcore/act@latest}"
     echo "→ pre-warming component cache"
     ${ACT} info ghcr.io/actpkg/random:latest >/dev/null 2>&1 || true
 
-    echo "→ recording demo.sh → ${CAST}"
-    rm -f "$CAST"
-    asciinema rec --cols 96 --rows 28 --command "bash ${HERE}/demo.sh" "$CAST"
+    echo "→ recording demo.sh → ${CAST_LOCAL}"
+    rm -f "$CAST_LOCAL"
+    asciinema rec --cols 96 --rows 28 \
+        --command "bash ${HERE}/demo.sh" \
+        "$CAST_LOCAL"
 fi
 
-if [[ ! -s "$CAST" ]]; then
-    echo "error: no cast file at ${CAST}" >&2
+if [[ ! -s "$CAST_LOCAL" ]]; then
+    echo "error: no cast at ${CAST_LOCAL}" >&2
     exit 1
 fi
 
-echo "→ rendering ${CAST} → ${OUT}"
-npx -y svg-term-cli --in "$CAST" --out "$OUT" \
-    --window --no-cursor --width 96 --height 28
+echo "→ publishing cast → ${CAST_PUB}"
+cp "$CAST_LOCAL" "$CAST_PUB"
 
-# Report size and preview absolute path
-echo "→ wrote $(wc -c < "$OUT" | awk '{printf "%.1f KB", $1/1024}') to ${OUT}"
+if command -v agg >/dev/null 2>&1; then
+    echo "→ rendering GIF via agg → ${GIF_PUB}"
+    agg \
+        --cols 96 --rows 28 \
+        --theme monokai \
+        --font-size 16 \
+        --speed 1.3 \
+        "$CAST_LOCAL" "$GIF_PUB"
+    echo "→ wrote $(wc -c < "$GIF_PUB" | awk '{printf "%.1f KB", $1/1024}') of GIF"
+else
+    cat <<EOF >&2
+warning: \`agg\` not found — skipping GIF.
+    Install for dev.to / RSS fallback:
+        cargo install --git https://github.com/asciinema/agg
+        # or grab a prebuilt binary release and put it on PATH
+    Then re-run:  ./render.sh --render-only
+EOF
+fi
+
+echo "→ cast: $(wc -c < "$CAST_PUB" | awk '{printf "%.1f KB", $1/1024}')"
