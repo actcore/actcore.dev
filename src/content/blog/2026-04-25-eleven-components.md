@@ -1,17 +1,18 @@
 ---
-title: "Eleven components, one protocol — a tour of actpkg"
+title: "A tour of actpkg — components on the protocol"
 description: "A protocol is only interesting if people actually write for it. Here's what's published on actpkg today — storage, network bridges, utilities, language embedders — and what each one is for."
 pubDate: 2026-04-25
 author: actcore
 draft: true
 ---
 
-The core ACT spec is small: one WIT interface, three async functions,
-some CBOR on the wire. But a protocol is only interesting if people
-actually write for it. Here's what's on `ghcr.io/actpkg` today,
-grouped by kind.
+The core ACT spec is small: a tool-dispatch interface and a few CBOR
+shapes on the wire, with stateful capabilities (sessions, events,
+resources) layered on as separate opt-in packages. But a protocol is
+only interesting if people actually write for it. Here's what's on
+`ghcr.io/actpkg` today, grouped by kind.
 
-All eleven components are MIT-or-Apache-2.0, published with signed
+Every component is MIT-or-Apache-2.0, published with signed
 attestations, and runnable with:
 
 ```bash
@@ -45,8 +46,7 @@ you don't want to ship a language-specific MCP server.
 
 [OpenWallet](https://openwallet.foundation/)-compatible local key
 storage. Stores seed phrases and derived keys on the filesystem under
-the operator-granted vault path. One of the first "stateful"
-components — useful demo of the `std:session-id` pattern.
+the operator-granted vault path.
 
 ## Network bridges
 
@@ -59,28 +59,37 @@ fetching — for example, from inside a bridge.
 
 ### [`openapi-bridge`](https://github.com/actpkg/openapi-bridge)
 
-Point it at **any** OpenAPI 3.x spec. It reads the spec, generates a
-JSON Schema per operation, and exposes each OpenAPI operation as an
-ACT tool. One component fronts anything — Petstore, Stripe,
-GitHub, your internal API. Pattern:
+Point it at **any** OpenAPI 3.x spec. The spec URL travels through
+`open-session` args (typed schema, validated host-side); the bridge
+fetches and parses the spec, then exposes each operation as a tool.
+One component fronts anything — Stripe, GitHub, your internal API,
+the Petstore reference — with one capability grant per upstream:
 
 ```bash
-act run ghcr.io/actpkg/openapi-bridge:latest --mcp \
-  --metadata '{"spec_url": "https://api.example.com/openapi.json"}' \
+act call ghcr.io/actpkg/openapi-bridge:latest find_pets_by_status \
+  --args '{"status":"sold"}' \
+  --session-args '{"spec_url":"https://api.example.com/openapi.json"}' \
   --http-policy allowlist --http-allow host=api.example.com
 ```
 
 ### [`mcp-bridge`](https://github.com/actpkg/mcp-bridge)
 
-Reverse adapter: wraps an upstream MCP server (stdio or HTTP) and
-re-exposes its tools through the ACT protocol. Lets you connect an
-existing MCP ecosystem to ACT-native clients (or put an ACT policy
-layer in front of an unsandboxed MCP server you don't fully trust).
+Reverse adapter: wraps an upstream MCP server (Streamable HTTP
+transport) and re-exposes its tools through the ACT protocol. Lets
+you connect an existing MCP ecosystem to ACT-native clients, or put
+an ACT policy layer in front of an unsandboxed MCP server you don't
+fully trust.
 
 ### [`act-http-bridge`](https://github.com/actpkg/act-http-bridge)
 
 Symmetric: wraps a remote ACT-HTTP server behind a local component.
 Useful for fronting a team-hosted service as a local-looking tool.
+
+All three bridges are session-based: the upstream URL and any
+credentials live inside `open-session.args` rather than per-call
+metadata. See [the sessions and bridges
+post](/blog/2026-05-07-act-07-sessions/) for the architecture and
+why authentication ended up there.
 
 ## Utilities
 
@@ -123,14 +132,15 @@ Coming up:
 
 ## Categorize the pattern
 
-Looking across the eleven, three patterns stand out:
+Looking across the catalog, three patterns stand out:
 
-1. **Data-plane components** own state inside the sandbox
-   (`sqlite`, `filesystem`, `openwallet`). The operator's filesystem
-   grant is the total exposure.
+1. **Data-plane components** own state on disk under an operator
+   grant (`sqlite`, `filesystem`, `openwallet`). The operator's
+   filesystem allow-list is the total exposure.
 2. **Bridge components** translate an external protocol into ACT
    (`openapi-bridge`, `mcp-bridge`, `act-http-bridge`). One component
-   covers a whole class of upstream.
+   covers a whole class of upstream — point it at a different URL
+   via `open-session` and it fronts a different upstream.
 3. **Pure functions** do computation with no I/O beyond the call
    boundary (`crypto`, `encoding`, `random`, `time`). No capabilities
    declared at all — hard-deny on anything the operator tries to
@@ -138,8 +148,8 @@ Looking across the eleven, three patterns stand out:
 
 Bridges are where the compounding happens. One `openapi-bridge`
 becomes `stripe`, `github`, `linear`, `anything-that-ships-OpenAPI`
-— all at the cost of one capability grant (`--http-allow
-host=api.stripe.com`) per target.
+— each as its own session against the same component, costing one
+capability grant per upstream host.
 
 ## Publishing your own
 

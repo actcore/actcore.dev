@@ -12,8 +12,7 @@ good actor or not. The agent may misuse the tool or not. The
 operator — you — wants a floor on how bad either outcome can get.
 
 ACT's policy layer is about installing that floor. This post walks
-through how it works in 0.5, from the wasmtime VM up to the DNS
-resolver.
+through how it works, from the wasmtime VM up to the DNS resolver.
 
 ## Three layers, explicit
 
@@ -139,8 +138,8 @@ HTTP policy is the more interesting half because redirects, CIDR
 rules, and DNS all interact.
 
 The [`reqwest`](https://docs.rs/reqwest)-backed HTTP client that ACT
-uses in 0.5 has a **custom DNS resolver** that sits in front of
-every outbound request. After a name resolves, every resolved IP
+uses has a **custom DNS resolver** that sits in front of every
+outbound request. After a name resolves, every resolved IP
 is checked against the operator's `--http-deny cidr=…` rules
 **before** the client proceeds to connect.
 
@@ -188,15 +187,15 @@ filters fall into.
 ## Ancestor traversal, a practical detail
 
 WASI path resolution stats every intermediate directory when opening
-a nested file. That bit us in 0.5.0: an `--fs-allow
-/tmp/work/db.sqlite` entry failed to open the file because WASI
-needed to stat `/tmp/work` and `/tmp` first, and neither was
-explicitly allowed.
+a nested file. The first cut of the policy bit us with a real
+component on this: an `--fs-allow /tmp/work/db.sqlite` entry failed
+to open the file because WASI needed to stat `/tmp/work` and `/tmp`
+first, and neither was explicitly allowed.
 
-0.5.1 fixed it: an allow entry for `/tmp/work/db.sqlite` now
-implicitly permits `/tmp/work` and `/tmp` for directory traversal,
-while sibling files in those directories remain denied. The
-implementation walks `target.ancestors()` during policy check:
+The fix: an allow entry for `/tmp/work/db.sqlite` now implicitly
+permits `/tmp/work` and `/tmp` for directory traversal, while sibling
+files in those directories remain denied. The implementation walks
+`target.ancestors()` during policy check:
 
 ```rust
 // runtime/fs_matcher.rs
@@ -221,13 +220,21 @@ capability pipeline. A tool from a stranger — `ghcr.io/somebody/…`
 — is safe to point your agent at in a way that `npm install -g` has
 never been.
 
-## What's next
+## Where this fits
 
-- The `rmcp` bridge and why we moved off a hand-rolled JSON-RPC
-  dispatcher.
-- Distribution: OCI registries, SBOMs, reproducible builds, and what
-  `actpkg.dev` will ship.
-- p3 (wasip3) filesystem per-op gating — currently awaiting upstream
-  wasmtime-wasi API.
+Sandboxing is the floor. On top of it, stateful capabilities
+(sessions, events, resources) get the same treatment — declared at
+build time, granted at run time, intersected by the host. The
+[sessions and bridges post](/blog/2026-05-07-act-07-sessions/) walks
+through that next layer, including how authentication lives inside
+session args (validated against a typed JSON Schema) rather than
+floating through per-call metadata.
+
+Still pending:
+
+- Per-op filesystem gating under wasip3 — currently awaiting upstream
+  `wasmtime-wasi` API.
+- A distribution post: OCI registries, signed SBOMs, reproducible
+  builds, and what [actpkg.dev](https://actpkg.dev) will ship.
 
 Questions welcome in the Bytecode Alliance Zulip.

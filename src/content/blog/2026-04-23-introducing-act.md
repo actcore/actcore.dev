@@ -33,7 +33,9 @@ That's the core trade ACT offers. The rest of this post is about why the WebAsse
 
 A side benefit of picking WebAssembly: the artifact is a single binary that runs everywhere.
 
-[Terminal demo: act info ghcr.io/actpkg/random:latest --tools](https://asciinema.org/a/ASCIINEMA_ID_PLACEHOLDER)
+```bash
+act info ghcr.io/actpkg/random:latest --tools
+```
 
 That command pulls a small component from GitHub's container registry, reads its metadata from a WASM custom section (no instantiation), and prints the tools it exposes. First pull is cached, every subsequent invocation hits the local `~/.cache/act/components`. The artifact is signed by GitHub's attestation workflow and comes with an SBOM — all upstream machinery; ACT just uses it.
 
@@ -108,12 +110,11 @@ mod component {
 
 Early, and deliberately narrow.
 
-The core spec — [act:core@0.3.0](https://github.com/actcore/act-spec/blob/main/wit/act-core.wit) — is a WIT world with three async functions. The host ships as `act` on npm and cargo. Eleven components are published on `ghcr.io/actpkg`: sqlite, http-client, openapi-bridge, mcp-bridge, crypto, encoding, filesystem, random, time, openwallet, python-eval. Rust and Python SDKs are live; JavaScript via componentize-js is [blocked on upstream async-export support](https://github.com/bytecodealliance/ComponentizeJS/issues/335).
+The core spec lives in [actcore/act-spec](https://github.com/actcore/act-spec) — a small WIT package for cross-cutting types and an opt-in interface package for tool dispatch, with stateful capabilities (sessions, events, resources) layered on as separate opt-in packages. The host ships as `act` on npm, cargo, and PyPI. A growing set of components is published on [`ghcr.io/actpkg`](https://github.com/orgs/actpkg/packages) — `sqlite`, `http-client`, `crypto`, `encoding`, `filesystem`, `openwallet`, `python-eval`, `js-eval`, `random`, `time`, plus three bridges (`mcp-bridge`, `openapi-bridge`, `act-http-bridge`). Rust and Python SDKs are live; JavaScript via `componentize-js` is [blocked on upstream async-export support](https://github.com/bytecodealliance/ComponentizeJS/issues/335).
 
-Follow-up posts coming on:
+More on the architecture:
 
-- The capability / policy layer in depth — declaration-as-ceiling, DNS-level deny-CIDR, per-hop redirect re-check, ancestor traversal, and what goes wrong when any of those is missing.
-- The `rmcp` bridge (a thin shim over the official MCP crate instead of the hand-rolled JSON-RPC dispatcher we had before).
-- Distribution — signed SBOMs, reproducible builds, the artifact lifecycle from `just build` to `actpkg.dev`.
+- [The capability ceiling](/blog/2026-04-24-capability-ceiling/) — declaration-as-ceiling, DNS-level deny-CIDR, per-hop redirect re-check, ancestor traversal, and what goes wrong when any of those is missing.
+- [Sessions and bridges](/blog/2026-05-07-act-07-sessions/) — how stateful components (databases, OpenAPI clients, MCP-server proxies) own their per-session state and where authentication actually belongs.
 
 If you write MCP servers, build agent tooling, or work on the component model, we'd love your thoughts. Start at [actcore.dev/docs](https://actcore.dev/docs/), browse [github.com/actcore](https://github.com/actcore), or ping us in the Bytecode Alliance Zulip.
