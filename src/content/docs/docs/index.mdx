@@ -34,7 +34,7 @@ graph TD
     Component -.-> Browser
 ```
 
-A component exports the `tool-provider` interface from [`act:core@0.3.0`](https://github.com/actcore/act-spec/blob/main/wit/act-core.wit). The host reads the component's metadata from a WASM custom section (`act:component`, CBOR) without instantiating it, then exposes the tools over any of four transports.
+Every component exports the `tool-provider` interface from [`act:tools@0.1.0`](https://github.com/actcore/act-spec/blob/main/wit/act-tools/act-tools.wit). Stateful components additionally export [`act:sessions@0.1.0`](https://github.com/actcore/act-spec/blob/main/wit/act-sessions/act-sessions.wit) — used by the bridges (mcp-bridge, openapi-bridge, act-http-bridge) and any component with a session lifecycle. Both depend on [`act:core@0.4.0`](https://github.com/actcore/act-spec/blob/main/wit/act-core/act-core.wit) for cross-cutting types. The host reads each component's metadata from a WASM custom section (`act:component`, CBOR) without instantiating it, then exposes the tools over any of four transports.
 
 ## What's in the box
 
@@ -43,7 +43,7 @@ A component exports the `tool-provider` interface from [`act:core@0.3.0`](https:
 - **`act-sdk` (Rust)** — `#[act_component]` / `#[act_tool]` macros.
 - **`act-sdk` (Python)** — `@component` / `@tool` decorators via `componentize-py`.
 - **Spec** — [`actcore/act-spec`](https://github.com/actcore/act-spec). WIT is normative; JSON Schema is derived.
-- **Components** — a growing set under [`ghcr.io/actpkg`](https://github.com/orgs/actpkg/packages): `sqlite`, `http-client`, `crypto`, `encoding`, `filesystem`, `openwallet`, `python-eval`, `mcp-bridge`, `openapi-bridge`, `random`, `time`.
+- **Components** — a growing set under [`ghcr.io/actpkg`](https://github.com/orgs/actpkg/packages): `sqlite`, `http-client`, `crypto`, `encoding`, `filesystem`, `openwallet`, `python-eval`, `js-eval`, `act-http-bridge`, `mcp-bridge`, `openapi-bridge`, `random`, `time`.
 
 ## Next
 

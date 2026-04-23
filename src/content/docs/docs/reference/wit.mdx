@@ -1,82 +1,129 @@
 ---
-title: WIT (act:core@0.3.0)
+title: WIT (act:core, act:tools, act:sessions)
 description: Normative WIT definition of the ACT protocol. Canonical source in actcore/act-spec.
 ---
 
-The WIT is the source of truth for the protocol. JSON Schema, OpenAPI, and MCP shapes are derived from it. The normative file lives at [`actcore/act-spec/wit/act-core.wit`](https://github.com/actcore/act-spec/blob/main/wit/act-core.wit).
+The WIT is the source of truth for the protocol. JSON Schema, OpenAPI, and MCP shapes are derived from it. Three normative packages live in [`actcore/act-spec/wit/`](https://github.com/actcore/act-spec/tree/main/wit):
 
-## The `tool-provider` interface
+| Package | Status | What's in it |
+|---|---|---|
+| [`act:core@0.4.0`](https://github.com/actcore/act-spec/blob/main/wit/act-core/act-core.wit) | Normative | Cross-cutting types: `metadata`, `error`, `localized-string`, `cbor` |
+| [`act:tools@0.1.0`](https://github.com/actcore/act-spec/blob/main/wit/act-tools/act-tools.wit) | Normative | The `tool-provider` interface — every component exports it |
+| [`act:sessions@0.1.0`](https://github.com/actcore/act-spec/blob/main/wit/act-sessions/act-sessions.wit) | Normative, opt-in | The `session-provider` interface — stateful components only |
+| [`act:events@0.1.0`](https://github.com/actcore/act-spec/blob/main/wit/act-events/act-events.wit) | Informative / RFC | `event-provider` (pub/sub) |
+| [`act:resources@0.1.0`](https://github.com/actcore/act-spec/blob/main/wit/act-resources/act-resources.wit) | Informative / RFC | `resource-provider` |
+
+Component-level metadata (name, version, description, capabilities) lives in the `act:component` WASM custom section, not as a WIT export.
+
+## `act:core@0.4.0` — types
 
 ```wit
-package act:core@0.3.0;
+package act:core@0.4.0;
 
-interface tool-provider {
-  use types.{tool-definition, tool-call, tool-result,
-             list-tools-response, tool-error, metadata};
+interface types {
+  /// CBOR-encoded byte string (RFC 8949 §4.2 dCBOR when crossing host boundaries).
+  type cbor = list<u8>;
 
-  /// JSON Schema describing metadata keys this component accepts.
-  /// Called with empty metadata MUST not do network I/O.
-  get-metadata-schema: async func(metadata: metadata) -> option<string>;
+  /// Key-value metadata. Keys are namespaced (`std:*`, `acme:*`, …),
+  /// values are CBOR-encoded.
+  type metadata = list<tuple<string, cbor>>;
 
-  /// List tools available for the given metadata.
-  list-tools: async func(metadata: metadata)
-      -> result<list-tools-response, tool-error>;
+  variant localized-string {
+    plain(string),
+    localized(list<tuple<string, string>>),
+  }
 
-  /// Invoke a tool. Returns immediate or streaming events.
-  call-tool: async func(call: tool-call) -> tool-result;
+  /// Structured error. Well-known kinds: std:not-found, std:invalid-args,
+  /// std:timeout, std:capability-denied, std:internal, std:session-not-found.
+  record error {
+    kind: string,
+    message: localized-string,
+    metadata: metadata,
+  }
 }
 ```
 
-Every ACT component exports this interface. Components export no other functions — component-level metadata (name, version, description, capabilities) lives in the `act:component` WASM custom section, not as an export.
-
-## Core types
+## `act:tools@0.1.0` — tool-provider
 
 ```wit
-type metadata = list<tuple<string, list<u8>>>;
+package act:tools@0.1.0;
 
-variant localized-string {
-  plain(string),
-  localized(list<tuple<string, string>>),
+interface tool-provider {
+  use act:core/types@0.4.0.{cbor, localized-string, metadata, error};
+
+  record tool-definition {
+    name: string,
+    description: localized-string,
+    parameters-schema: string,    // JSON Schema as a string
+    metadata: metadata,
+  }
+
+  record content-part {
+    data: list<u8>,
+    mime-type: option<string>,
+    metadata: metadata,
+  }
+
+  variant tool-event {
+    content(content-part),
+    error(error),                 // terminal
+  }
+
+  variant tool-result {
+    immediate(list<tool-event>),
+    streaming(stream<tool-event>),
+  }
+
+  record list-tools-response {
+    metadata: metadata,
+    tools: list<tool-definition>,
+  }
+
+  list-tools: async func(metadata: metadata)
+      -> result<list-tools-response, error>;
+
+  call-tool: async func(
+    name: string,
+    arguments: cbor,
+    metadata: metadata,
+  ) -> tool-result;
 }
+```
 
-record tool-definition {
-  name: string,
-  description: localized-string,
-  parameters-schema: string,   // JSON Schema as a string
-  metadata: metadata,
-}
+### `tool-result` variants
 
-record tool-call {
-  name: string,
-  arguments: list<u8>,         // dCBOR (RFC 8949 §4.2)
-  metadata: metadata,
-}
+Both variants have identical observable semantics — an ordered sequence of `tool-event`s, with `tool-event::error` terminal. Hosts and intermediaries MAY freely convert between them.
 
-record content-part {
-  data: list<u8>,
-  mime-type: option<string>,
-  metadata: metadata,
-}
+- **`immediate(list<tool-event>)`** — natural for sync guest bodies and languages without an async runtime; the whole event list is materialized on return.
+- **`streaming(stream<tool-event>)`** — natural for long-running or I/O-bound tools; events flow as they're produced.
 
-record tool-error {
-  kind: string,                // std:not-found, std:invalid-args, …
-  message: localized-string,
-  metadata: metadata,
-}
+## `act:sessions@0.1.0` — session-provider (opt-in)
 
-variant tool-event {
-  content(content-part),
-  error(tool-error),           // terminal
-}
+Stateful components — bridges, REPLs, DB connections, browser automation — additionally export `session-provider`. Agents address per-session state via `std:session-id` metadata on subsequent `tool-provider` calls. See [ACT-SESSIONS](https://github.com/actcore/act-spec/blob/main/spec/ACT-SESSIONS.md).
 
-variant tool-result {
-  immediate(list<tool-event>),
-  streaming(stream<tool-event>),
-}
+```wit
+package act:sessions@0.1.0;
 
-record list-tools-response {
-  metadata: metadata,
-  tools: list<tool-definition>,
+interface session-provider {
+  use act:core/types@0.4.0.{metadata, error};
+
+  record session {
+    id: string,
+    metadata: metadata,
+  }
+
+  /// JSON Schema for valid `args` to open-session.
+  get-open-session-args-schema: async func(metadata: metadata)
+      -> result<string, error>;
+
+  /// Open a new session. `args` carries connection params and credentials
+  /// (per ACT-AUTH, auth lives in session args, not metadata).
+  open-session: async func(args: metadata, metadata: metadata)
+      -> result<session, error>;
+
+  /// Polite shutdown — sync, swallows errors. Hosts MUST call this for
+  /// every session they opened, before component deinit.
+  close-session: func(session-id: string);
 }
 ```
 
@@ -86,23 +133,6 @@ record list-tools-response {
 - MIME-typed content parts may carry JSON, text, images, or opaque bytes — the host routes based on `mime-type`.
 - Metadata keys are namespaced strings. Values are CBOR-encoded.
 
-## `tool-result` variants
-
-Both variants have identical observable semantics — an ordered sequence of `tool-event`s, with `tool-event::error` terminal. Intermediaries (bridges, adapters) MAY freely convert between them.
-
-- **`immediate(list<tool-event>)`** — natural for sync guest bodies and languages without an async runtime; the whole event list is materialized on return.
-- **`streaming(stream<tool-event>)`** — natural for long-running or I/O-bound tools; events flow as they're produced.
-
 ## Component metadata (CBOR custom section)
 
 Not part of the WIT — defined in the [ACT specification](https://github.com/actcore/act-spec/blob/main/spec/ACT-SPEC.md). The host reads it without instantiating the component. See [Manifest reference](/docs/build/manifest/) for the authoring side.
-
-## Related WIT files
-
-| File | Status |
-|---|---|
-| [`act-core.wit`](https://github.com/actcore/act-spec/blob/main/wit/act-core.wit) | **Normative** — the contract above |
-| [`act-events.wit`](https://github.com/actcore/act-spec/blob/main/wit/act-events.wit) | Informative / RFC — `event-provider` (pub/sub) |
-| [`act-resources.wit`](https://github.com/actcore/act-spec/blob/main/wit/act-resources.wit) | Informative / RFC — `resource-provider` |
-
-The informative WITs are under active design; they'll graduate to normative after production validation in published components.

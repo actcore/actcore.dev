@@ -11,7 +11,7 @@ cd my-component
 just init
 ```
 
-The template sets up `Cargo.toml` with `act-sdk = "0.5"`, a `wit/` directory tracking [`act:core@0.3.0`](https://github.com/actcore/act-spec/blob/main/wit/act-core.wit), a `rust-toolchain.toml` pinning nightly + `wasm32-wasip2`, and a `justfile` with `build` / `test` / `publish` recipes.
+The template sets up `Cargo.toml` with `act-sdk = "0.7"`, a `wit/` directory tracking [`act:tools@0.1.0`](https://github.com/actcore/act-spec/blob/main/wit/act-tools/act-tools.wit) (and [`act:sessions@0.1.0`](https://github.com/actcore/act-spec/blob/main/wit/act-sessions/act-sessions.wit) for stateful components) over [`act:core@0.4.0`](https://github.com/actcore/act-spec/blob/main/wit/act-core/act-core.wit), a `rust-toolchain.toml` pinning nightly + `wasm32-wasip2`, and a `justfile` with `build` / `test` / `publish` recipes.
 
 ## Write a tool
 
@@ -67,7 +67,7 @@ act call <wasm> reverse --args '{"text":"hello"}'
 
 | Macro / type | Purpose |
 |---|---|
-| `#[act_component]` | Wraps a module as the `act:core/tool-provider` export |
+| `#[act_component]` | Wraps a module as the `act:tools/tool-provider` export |
 | `#[act_tool(…)]` | Registers a fn as a tool, emits JSON Schema from the signature + doc comments |
 | `ActError` / `ActResult` | Return errors with a `std:*` kind and localized message |
 | `Json<T>` | Opt into JSON encoding (default is CBOR, per [ACT-SPEC](https://github.com/actcore/act-spec/blob/main/spec/ACT-SPEC.md)) |

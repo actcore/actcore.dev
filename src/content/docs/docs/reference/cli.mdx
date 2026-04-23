@@ -1,6 +1,6 @@
 ---
 title: CLI reference
-description: Complete act and act-build command and flag surface for 0.5.x.
+description: Complete act and act-build command and flag surface for 0.7.x.
 ---
 
 ## `act`
@@ -9,11 +9,12 @@ description: Complete act and act-build command and flag surface for 0.5.x.
 act <COMMAND>
 
 Commands:
-  run     Load a .wasm component and serve it (HTTP or MCP) or a one-shot CLI call
-  call    Call a tool directly and print the result
-  info    Show component info and optionally list tools
-  skill   Extract embedded Agent Skills from a component
-  pull    Pull a component from a registry
+  run      Load a .wasm component and serve it (HTTP or MCP) or a one-shot CLI call
+  call     Call a tool directly and print the result
+  info     Show component info and optionally list tools
+  skill    Extract embedded Agent Skills from a component
+  pull     Pull a component from a registry
+  session  Manage component sessions (open-args-schema, open, close)
 ```
 
 All subcommands that take a component accept three reference forms: a local path, an HTTP(S) URL, or an OCI registry ref (e.g. `ghcr.io/actpkg/sqlite:latest`). Remote components are cached in `~/.cache/act/components/`.
