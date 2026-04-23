@@ -17,6 +17,14 @@ OUT="${HERE}/../../../public/blog/introducing-act-demo.svg"
 mkdir -p "$(dirname "$OUT")"
 
 if [[ "${1:-}" != "--render-only" ]]; then
+    # Warm the component cache BEFORE the recording so the cast doesn't
+    # include the OCI pull's progress-bar redraws (dozens of \r frames
+    # that dominate the rendered SVG). The visible demo then hits the
+    # local cache in ~150 ms.
+    : "${ACT:=npx -y @actcore/act@latest}"
+    echo "→ pre-warming component cache"
+    ${ACT} info ghcr.io/actpkg/random:latest >/dev/null 2>&1 || true
+
     echo "→ recording demo.sh → ${CAST}"
     rm -f "$CAST"
     asciinema rec --cols 96 --rows 28 --command "bash ${HERE}/demo.sh" "$CAST"

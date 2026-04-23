@@ -33,9 +33,9 @@ That's the core trade ACT offers. The rest of this post is about why the WebAsse
 
 A side benefit of picking WebAssembly: the artifact is a single binary that runs everywhere.
 
-![act info ghcr.io/actpkg/sqlite:latest --tools](/blog/introducing-act-demo.svg)
+![act info ghcr.io/actpkg/random:latest --tools](/blog/introducing-act-demo.svg)
 
-That command pulls a 1.5 MB component from GitHub's container registry, reads its metadata from a WASM custom section (no instantiation), and prints the tools it exposes. First pull is cached. The artifact is signed by GitHub's attestation workflow and comes with an SBOM — all upstream machinery; ACT just uses it.
+That command pulls a small component from GitHub's container registry, reads its metadata from a WASM custom section (no instantiation), and prints the tools it exposes. First pull is cached, every subsequent invocation hits the local `~/.cache/act/components`. The artifact is signed by GitHub's attestation workflow and comes with an SBOM — all upstream machinery; ACT just uses it.
 
 Same bytes, same SHA256, on Linux x86_64, macOS arm64, Windows, Android (validated), Raspberry Pi, inside a browser tab, inside a serverless runtime. No per-platform wheels, no native shims, no build toolchain required on anyone's machine but yours. And because the artifact is a registry object rather than three separate npm/pip/cargo packages, there's one supply-chain path to audit instead of three.
 
