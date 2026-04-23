@@ -54,13 +54,17 @@ export async function buildRssItems(
 		//     embed interactively without asciinema.org JS, which feed
 		//     readers strip).
 		const rawHtml = md.render(post.body ?? '');
+		// dev.to's RSS importer recognises its own liquid tags inside
+		// content:encoded and resolves the embed server-side via its
+		// registered asciinema oEmbed provider. Generic feed readers
+		// can't execute JS, so we leave the link as-is — it's already
+		// a natural fallback.
 		const substituted = opts.devToFrontmatter
-			? replaceAsciinema(rawHtml, (id) => `{% asciinema ${id} %}`)
-			: replaceAsciinema(
+			? replaceAsciinemaLink(
 					rawHtml,
-					(id) =>
-						`<p><a href="https://asciinema.org/a/${id}">Terminal demo (asciinema)</a></p>`,
-			  );
+					(url) => `{% embed ${url} %}`,
+			  )
+			: rawHtml;
 		const rendered = sanitizeHtml(substituted, sanitizeOptions);
 		// Rewrite root-relative asset URLs (/blog/... etc.) to absolute so
 		// crossposted feeds — and any aggregator that doesn't know our
@@ -95,16 +99,16 @@ function absolutizeUrls(html: string, site: URL): string {
 	);
 }
 
-function replaceAsciinema(
+function replaceAsciinemaLink(
 	html: string,
-	fn: (id: string) => string,
+	fn: (url: string) => string,
 ): string {
-	// Match <div data-asciinema-id="…"></div> (with optional whitespace,
-	// other attrs, inner content). The placeholder is always a self-
-	// contained element in our markdown, but be liberal in parsing.
+	// Match a paragraph containing only a single anchor to asciinema.org.
+	// That's the "block embed" convention — inline links in prose
+	// (e.g. "see the [demo](asciinema.org/…) for details") stay as links.
 	return html.replace(
-		/<div([^>]*\sdata-asciinema-id="([^"]+)"[^>]*)>[\s\S]*?<\/div>/g,
-		(_full, _attrs, id) => fn(id),
+		/<p>\s*<a\s+href="(https:\/\/asciinema\.org\/a\/[^"]+)"[^>]*>[^<]*<\/a>\s*<\/p>/g,
+		(_full, url) => fn(url),
 	);
 }
 

@@ -36,10 +36,11 @@ asciinema auth           # first time; opens a browser
 # → records demo.cast, uploads to asciinema.org, prints cast URL + ID
 ```
 
-Then paste the ID into:
+Then paste the cast URL into the post, as an ordinary markdown link
+sitting on its own line:
 ```
 src/content/blog/2026-04-23-introducing-act.md
-    <div data-asciinema-id="NEW_ID"></div>
+    [Terminal demo: act info …](https://asciinema.org/a/NEW_ID)
 ```
 
 ### Re-upload the existing demo.cast without re-recording
@@ -59,11 +60,15 @@ asciinema.org ID.
 
 ## How the embed resolves
 
+The post's markdown contains a single markdown link to the asciinema.org
+cast, sitting alone in its own paragraph. That one source resolves three
+ways without any duplicated content:
+
 | Target | Source | Mechanism |
 |---|---|---|
-| actcore.dev | asciinema.org cast ID | Client-side JS replaces `<div data-asciinema-id="X"></div>` with `<script src="https://asciinema.org/a/X.js">` |
-| dev.to | asciinema.org cast ID | `devto.xml` RSS emits `{% asciinema X %}` liquid tag; dev.to renders it server-side |
-| generic RSS readers | asciinema.org cast URL | `rss.xml` emits a plain link to the cast page (feed readers can't execute JS) |
+| actcore.dev | standalone `<a href="https://asciinema.org/a/X">…</a>` | Client-side JS detects the block-level anchor and replaces it with `<script src="https://asciinema.org/a/X.js">` |
+| dev.to | same link | `devto.xml` RSS substitutes the anchor with `{% embed https://asciinema.org/a/X %}`, which dev.to resolves through asciinema.org's registered oEmbed provider |
+| generic RSS readers | same link | `rss.xml` leaves the link untouched — feed readers can't execute JS, and a plain link is the graceful fallback |
 
 Source of substitution logic: `src/pages/blog/[...slug].astro` and
 `src/lib/rss-items.ts`.

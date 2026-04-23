@@ -52,21 +52,32 @@ if (coverAbsolute) {
 </StarlightPage>
 
 <script>
-	// Upgrade [data-asciinema-id] placeholders into an asciinema.org
-	// script embed. Source of truth lives on asciinema.org; generic
-	// feed readers and dev.to's RSS importer see a different
-	// substitution (dev.to's liquid tag / a fallback link) rendered
-	// server-side in rss-items.ts.
+	// Upgrade standalone asciinema.org links (a single <a> in its
+	// own <p>) into an inline asciinema.org script embed. Matches
+	// the oEmbed convention: the URL is the source of truth, the
+	// consumer decides how to render. dev.to does the same
+	// server-side via its registered asciinema provider.
+	const ASCIINEMA_HREF = /^https:\/\/asciinema\.org\/a\/([^/?#]+)/;
 	document
-		.querySelectorAll<HTMLElement>('[data-asciinema-id]')
-		.forEach((el) => {
-			const id = el.getAttribute('data-asciinema-id');
-			if (!id) return;
+		.querySelectorAll<HTMLAnchorElement>('a[href*="asciinema.org/a/"]')
+		.forEach((link) => {
+			const parent = link.parentElement;
+			if (
+				!parent ||
+				parent.tagName !== 'P' ||
+				parent.children.length !== 1 ||
+				parent.textContent?.trim() !== link.textContent?.trim()
+			) {
+				return;
+			}
+			const match = link.href.match(ASCIINEMA_HREF);
+			if (!match) return;
+			const id = match[1];
 			const script = document.createElement('script');
 			script.async = true;
 			script.src = `https://asciinema.org/a/${id}.js`;
 			script.id = `asciicast-${id}`;
-			el.replaceWith(script);
+			parent.replaceWith(script);
 		});
 </script>
 
@@ -76,9 +87,6 @@ if (coverAbsolute) {
 	}
 	body:has(.blog-post) {
 		--sl-content-width: var(--blog-content-width);
-	}
-	[data-asciinema-id] {
-		min-height: 12rem;
 	}
 </style>
 <style>
