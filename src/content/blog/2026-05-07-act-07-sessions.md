@@ -169,16 +169,27 @@ host-side translation.
 opens a session, threads the returned id into the call's metadata as
 `std:session-id`, runs the tool, and closes the session — all in one
 process, so the wasm instance stays alive for the full sequence.
-The whole `openapi-bridge → upstream → response` cycle becomes one
-command:
+
+A self-contained demo: serve the `time` component locally, then
+proxy through `act-http-bridge` and call it through the proxy.
 
 ```bash
-act call ghcr.io/actpkg/openapi-bridge:0.2.0 find_pets_by_status \
-  --args '{"status":"sold"}' \
-  --session-args '{"spec_url":"https://petstore3.swagger.io/api/v3/openapi.json"}' \
+# Terminal 1 — upstream ACT-HTTP server.
+act run ghcr.io/actpkg/time:0.2.0 --http -l '[::1]:3000'
+
+# Terminal 2 — one-shot call through the bridge.
+act call ghcr.io/actpkg/act-http-bridge:0.2.0 get_current_time \
+  --args '{}' \
+  --session-args '{"url":"http://[::1]:3000"}' \
   --http-policy open
-# [{"id":1,"name":"Dog 1","status":"sold"}, ...]
+# 2026-05-07T12:00:00.000+00:00
 ```
+
+The bridge instance opens a session that owns the upstream URL, calls
+`get_current_time` through it, closes the session, and exits. With an
+`openapi-bridge` instead of `act-http-bridge` and `--session-args
+'{"spec_url":"..."}'` instead of `{"url":"..."}'`, the same shape
+works for any OpenAPI 3.x spec.
 
 `act session open-args-schema` is also still there for inspecting a
 component's session args. Earlier 0.7.0 shipped `act session open` and
