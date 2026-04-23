@@ -165,14 +165,29 @@ also forwards any `_meta` keys from the agent into the WIT call
 metadata, so `std:session-id` reaches the component without any
 host-side translation.
 
-**ACT-CLI** keeps `act session open-args-schema` for inspecting a
-component's session args. The earlier 0.7.0 release included
-`act session open` and `act session close` as well, but those were
-useless: each invocation is a one-shot process whose wasm instance
-dies on exit, so an `open` from one process is unreachable from a
-later `call`. They were removed in 0.7.1. For real session work,
-`act run --http` or `act run --mcp` keeps the wasm alive for the
-whole transport's lifetime.
+**ACT-CLI** picks up a new flag, `act call --session-args`. The host
+opens a session, threads the returned id into the call's metadata as
+`std:session-id`, runs the tool, and closes the session — all in one
+process, so the wasm instance stays alive for the full sequence.
+The whole `openapi-bridge → upstream → response` cycle becomes one
+command:
+
+```bash
+act call ghcr.io/actpkg/openapi-bridge:0.2.0 find_pets_by_status \
+  --args '{"status":"sold"}' \
+  --session-args '{"spec_url":"https://petstore3.swagger.io/api/v3/openapi.json"}' \
+  --http-policy open
+# [{"id":1,"name":"Dog 1","status":"sold"}, ...]
+```
+
+`act session open-args-schema` is also still there for inspecting a
+component's session args. Earlier 0.7.0 shipped `act session open` and
+`act session close` as separate subcommands, but those were useless:
+each invocation is a one-shot process whose wasm instance dies on
+exit, so a session opened in one process is unreachable from a later
+`call`. They were removed in 0.7.1, and `--session-args` replaces
+both of them with the right shape — the open/call/close cycle in one
+process — in 0.7.2.
 
 ## SDK ergonomics
 
@@ -234,11 +249,13 @@ known gap; an SDK-side affordance for dynamic catalogs is on the list.
   open-session schema, runs the OAuth flow, and injects the bearer
   into args before calling `open-session`. The annotations are
   spec'd; the host implementation isn't there yet.
-- **Auto-open from host config.** Today an agent has to call
-  `open_session` itself when it first encounters a session-aware
-  component. For "I always want this OpenAPI / MCP server / API"
-  cases, the host should pre-open the session at startup based on
-  config, so the agent just sees ordinary tools.
+- **Auto-open from host config for `--mcp` / `--http`.** `act call`
+  now opens / closes per-invocation via `--session-args`, but for the
+  long-running transports the agent still has to call `open_session`
+  itself. For "I always want this OpenAPI / MCP server / API"
+  configurations, the host should pre-open the session at startup
+  from config, so the agent sees ordinary tools and never thinks
+  about the session at all.
 - **Postgres component.** A component that authenticates via
   `open-session.args`, holds a real connection through the session,
   and does parameterised queries through the tools. Not ready yet —
