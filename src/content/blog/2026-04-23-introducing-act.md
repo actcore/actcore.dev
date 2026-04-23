@@ -118,4 +118,4 @@ More on the architecture:
 - [The capability ceiling](/blog/2026-04-24-capability-ceiling/) — declaration-as-ceiling, DNS-level deny-CIDR, per-hop redirect re-check, ancestor traversal, and what goes wrong when any of those is missing.
 - [Sessions and bridges](/blog/2026-05-07-act-07-sessions/) — how stateful components (databases, OpenAPI clients, MCP-server proxies) own their per-session state and where authentication actually belongs.
 
-If you write MCP servers, build agent tooling, or work on the component model, we'd love your thoughts. Start at [actcore.dev/docs](https://actcore.dev/docs/), browse [github.com/actcore](https://github.com/actcore), or ping us in the Bytecode Alliance Zulip.
+If you write MCP servers, build agent tooling, or work on the component model, we'd love your thoughts. Start at [actcore.dev/docs](https://actcore.dev/docs/), browse [github.com/actcore](https://github.com/actcore), or open a thread in [Discussions](https://github.com/actcore/act-spec/discussions).

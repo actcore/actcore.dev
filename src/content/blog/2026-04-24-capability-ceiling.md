@@ -236,4 +236,4 @@ Still pending:
 - A distribution post: OCI registries, signed SBOMs, reproducible
   builds, and what [actpkg.dev](https://actpkg.dev) will ship.
 
-Questions welcome in the Bytecode Alliance Zulip.
+Questions welcome in [Discussions](https://github.com/actcore/act-spec/discussions).
