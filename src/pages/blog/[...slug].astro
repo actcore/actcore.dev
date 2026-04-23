@@ -14,6 +14,23 @@ const dateStr = post.data.pubDate.toLocaleDateString('en-US', {
 	month: 'long',
 	day: 'numeric',
 });
+
+const siteOrigin = Astro.site?.origin ?? 'https://actcore.dev';
+const coverAbsolute = post.data.cover_image
+	? new URL(post.data.cover_image, siteOrigin).href
+	: undefined;
+
+type HeadEntry = { tag: 'meta'; attrs: { property?: string; name?: string; content: string } };
+const headMeta: HeadEntry[] = [];
+if (coverAbsolute) {
+	headMeta.push(
+		{ tag: 'meta', attrs: { property: 'og:image', content: coverAbsolute } },
+		{ tag: 'meta', attrs: { property: 'og:image:width', content: '1200' } },
+		{ tag: 'meta', attrs: { property: 'og:image:height', content: '630' } },
+		{ tag: 'meta', attrs: { name: 'twitter:card', content: 'summary_large_image' } },
+		{ tag: 'meta', attrs: { name: 'twitter:image', content: coverAbsolute } },
+	);
+}
 ---
 
 <StarlightPage
@@ -23,6 +40,7 @@ const dateStr = post.data.pubDate.toLocaleDateString('en-US', {
 		template: 'splash',
 		pagefind: true,
 		tableOfContents: false,
+		head: headMeta,
 	}}
 >
 	<div class="blog-post">

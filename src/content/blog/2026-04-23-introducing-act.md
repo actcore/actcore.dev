@@ -8,6 +8,7 @@ tags:
   - rust
   - opensource
   - ai
+cover_image: https://actcore.dev/blog/introducing-act-cover.png
 ---
 
 A useful tool today ships with a matrix behind it.
