@@ -3,7 +3,6 @@ title: "The capability ceiling — how ACT sandboxes third-party tools"
 description: "ACT layers a declaration-as-ceiling policy model on top of WASI's capability imports and wasmtime's VM isolation. The declared ceiling, runtime policy, DNS-layer deny-CIDR, and per-hop redirect re-check combine to make a tool from an untrusted author safe to run under your agent."
 pubDate: 2026-04-24
 author: actcore
-draft: true
 ---
 
 Handing a third-party tool to your AI agent is the same problem as

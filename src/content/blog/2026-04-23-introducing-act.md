@@ -9,6 +9,7 @@ tags:
   - opensource
   - ai
 cover_image: https://actcore.dev/blog/introducing-act-cover.png
+draft: false
 ---
 
 Setting up an MCP server for your AI agent today usually looks like this:

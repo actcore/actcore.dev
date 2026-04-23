@@ -3,7 +3,6 @@ title: "A tour of actpkg — components on the protocol"
 description: "A protocol is only interesting if people actually write for it. Here's what's published on actpkg today — storage, network bridges, utilities, language embedders — and what each one is for."
 pubDate: 2026-04-25
 author: actcore
-draft: true
 ---
 
 The core ACT spec is small: a tool-dispatch interface and a few CBOR
