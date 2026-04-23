@@ -1,6 +1,6 @@
 ---
-title: "One .wasm, everywhere — introducing ACT"
-description: "ACT packages tools as WebAssembly components — one binary that runs on every OS, every CPU, under an explicit capability sandbox. Stops the per-platform install tax that native tools pay today."
+title: "MCP servers, sandboxed — introducing ACT"
+description: "Today's MCP servers ship as `npx`, `uvx`, or `curl | bash` — ambient-permission native processes with your full user access. ACT packages tools as sandboxed WebAssembly components with declared capabilities and deny-by-default filesystem and network, so an agent can safely call tools written by a stranger."
 pubDate: 2026-04-23
 author: actcore
 tags:
@@ -11,102 +11,61 @@ tags:
 cover_image: https://actcore.dev/blog/introducing-act-cover.png
 ---
 
-A useful tool today ships with a matrix behind it.
+Setting up an MCP server for your AI agent today usually looks like this:
 
-`npm install`, `pip install`, `cargo install`, `brew install`, or `apt
-install` — pick your package manager. Now pick your OS. Now pick your
-architecture. Somewhere in the middle a native dependency falls over:
-a missing system library, a mismatched wheel, a postinstall script
-that tries to shell out to `gcc`. You end up with half a gigabyte of
-build tooling on your laptop just to run a 200-line utility.
+```bash
+npx -y @some-org/mcp-server          # or
+uvx some-mcp-server                  # or the occasional
+curl https://example.com/install.sh | bash
+```
 
-**ACT** — Agent Component Tools — tries a different deal.
+The server runs as you. It can read your home directory. It sees your SSH keys, your `.env` files, your shell history, your browser cookies, your GPG keyring. If the server has a bug — or a malicious dependency sneaks in — the code that reads those files also runs as you. If your kernel or any installed binary has an unpatched local privilege escalation, the agent-invoked tool just inherited that escalation path too.
 
-You compile the tool **once**, as a WebAssembly component. You get a
-single `.wasm` file. That file runs on Linux x86_64, macOS arm64,
-Windows, Android, Raspberry Pi, inside a browser tab, inside a
-serverless runtime. Same bytes. Same SHA256. No per-platform wheels,
-no native shims, no build toolchain required on anyone's machine but
-yours.
+That isn't a failure mode of any particular MCP server; it's the default deployment model. **Ambient-permission native processes, shipped by anyone, invoked on demand by an LLM that's notoriously easy to talk into misusing them.** "Your agent has your credentials and runs strangers' code on request" is the baseline security posture of every MCP setup built on `npx` / `uvx` / `curl | bash` today. It's a full-blown security nightmare that the industry has collectively decided not to look at.
+
+**ACT** — Agent Component Tools — is the model that looks at it.
+
+Every ACT tool is a WebAssembly component running inside [`wasmtime`](https://wasmtime.dev) — a full VM with a JIT, linear memory, and no ambient host syscalls. Out of the box the component has zero filesystem access, zero outbound network, and no way to spawn a process. Each capability it does use (`wasi:filesystem`, `wasi:http`) is **declared** in the component manifest at build time and **granted** by the operator at run time. The host enforces the intersection: a permissive operator can't escalate past the component's stated intent, a lazy component can't silently exceed the operator's grant. You hand a tool from `ghcr.io/someone-else/whatever` to your agent, and the worst-case blast radius is still bounded by the policy you wrote.
+
+That's the core trade ACT offers. The rest of this post is about why the WebAssembly-component substrate makes it practical.
 
 ## Distribution, for free
 
-The artifact is a container-registry object, because that's what OCI
-registries already do well:
+A side benefit of picking WebAssembly: the artifact is a single binary that runs everywhere.
 
 ```bash
 npx @actcore/act info ghcr.io/actpkg/sqlite:latest --tools
 ```
 
-That command pulls a 1.5 MB component from GitHub's container
-registry, reads its metadata from a WASM custom section (no
-instantiation), and prints the tools it exposes. First pull is
-cached. The artifact is signed by GitHub's attestation workflow and
-comes with an SBOM. That's all upstream machinery; ACT just uses it.
+That command pulls a 1.5 MB component from GitHub's container registry, reads its metadata from a WASM custom section (no instantiation), and prints the tools it exposes. First pull is cached. The artifact is signed by GitHub's attestation workflow and comes with an SBOM — all upstream machinery; ACT just uses it.
 
-Want to host your own component? `oras push` it to any OCI registry.
-Want to ship it as a plain file? `.wasm` over HTTP works just as
-well. `act` accepts all three:
+Same bytes, same SHA256, on Linux x86_64, macOS arm64, Windows, Android (validated), Raspberry Pi, inside a browser tab, inside a serverless runtime. No per-platform wheels, no native shims, no build toolchain required on anyone's machine but yours. And because the artifact is a registry object rather than three separate npm/pip/cargo packages, there's one supply-chain path to audit instead of three.
+
+`act` accepts components from any of:
 
 - local path: `./my-component.wasm`
 - HTTP URL: `https://example.com/tool.wasm`
 - OCI ref: `ghcr.io/your-org/tool:1.2.3`
 
-No "my-tool-npm" and "my-tool-pypi" and "my-tool-cargo". One
-artifact. One namespace.
+No "my-tool-npm" and "my-tool-pypi" and "my-tool-cargo". One artifact. One namespace.
 
-## Sandboxing, by default
+## How the sandbox actually works
 
-This is the part that matters most.
+The isolation comes from three stacked layers, and it's worth separating them because "WASI sandbox" isn't quite the right phrase.
 
-Any tool you install today — unless you go out of your way — runs
-with your full user permissions. An `npm install` can read your SSH
-keys. A `pip install` can exfiltrate your `.env`. A "simple" CLI
-utility has the same ambient filesystem and network access as you do.
-Sandboxing native code is possible (firejail, bwrap, cgroups) but
-tedious enough that almost nobody does it for day-to-day tooling.
+**wasmtime** is the actual isolation. It's a WebAssembly VM: linear-memory bounds enforced, no direct syscalls, no pointer aliasing, no escape outside of explicit host imports. Every ACT target runs the same wasmtime, so the isolation is identical on every OS and CPU.
 
-ACT components don't run natively. They run inside [`wasmtime`](https://wasmtime.dev) —
-a full WebAssembly VM with a JIT, linear-memory isolation, and no
-direct access to host syscalls.
-The component can't read files, open sockets, or spawn processes on
-its own; the only way out of the VM is through explicit imports the
-host chose to wire up. That's the real isolation boundary — and
-because every target runs the same wasmtime, it's identical on
-Linux, macOS, Windows, and Android.
+**WASI** is the capability-import layer on top. A component asks for `wasi:filesystem` or `wasi:http` imports; the host either wires them up, provides a gated proxy, or leaves them unlinked. There's no "deny" at the capability level — a component either has the import or it doesn't.
 
-WASI is the capability-oriented I/O interface layered on top of
-that VM. A component asks for `wasi:filesystem` or `wasi:http`
-imports; the host either provides them, provides a gated proxy, or
-doesn't provide them at all. Everything else stays inside wasmtime.
+**ACT** is the policy layer on top of WASI. Filesystem and outbound network are deny-by-default. The component's manifest declares what it needs (`[std.capabilities."wasi:filesystem"]`, `"wasi:http"`) — this is a ceiling. The operator's runtime flags (`--fs-allow /tmp/db.sqlite`, `--http-allow host=api.example.com`) are the grant. The host computes the intersection and refuses to wire up anything outside it.
 
-ACT adds a policy layer on top of the capability imports. Filesystem
-and outbound network are **deny-by-default**. To let a component
-touch anything, two things have to agree:
+Deny-CIDR rules sit in front of DNS resolution, so a component that tries to reach `169.254.169.254` (the cloud-metadata service) fails with a `DnsError` before a socket opens. HTTP redirects are re-checked per-hop, so a 302 to a denied host fails mid-chain instead of quietly succeeding. Details are in the [capability-layer deep-dive](/blog/) (next post).
 
-1. The component's manifest declares what it needs
-   (`[std.capabilities."wasi:filesystem"]`, `"wasi:http"`). This is a
-   ceiling — empty or missing = hard-deny, full stop.
-2. At run time, the operator grants a policy that fits inside that
-   ceiling (`--fs-allow /tmp/db.sqlite`, `--http-allow host=api.example.com`).
-
-The effective policy is the intersection. A permissive operator
-can't escalate past a component's stated intent, and a lazy
-component can't silently exceed the operator's grants. Deny-CIDR
-rules filter outbound resolution against RFC1918, link-local, and
-anything else you mark off-limits — right at the DNS layer, so a
-component that tries to phone home to `169.254.169.254` (the
-cloud-metadata IP) fails with a `DnsError` before a socket is ever
-opened.
-
-The VM gives us isolation. WASI gives us capability imports. ACT
-gives us the declaration-plus-ceiling model that makes those
-capabilities safe to hand to third-party code.
+The VM gives us isolation. WASI gives us capability imports. ACT gives us the declaration-plus-ceiling model that makes those capabilities safe to hand to third-party code.
 
 ## One component, any transport
 
-A neat side-effect of writing tools as components: the host can serve
-them over whatever wire format the caller wants.
+Because tools are components, not native processes, the host can serve them over whatever wire format the caller wants.
 
 ```bash
 # Claude Desktop / Cursor / Cline → stdio JSON-RPC
@@ -125,8 +84,7 @@ act call ghcr.io/actpkg/sqlite:latest query \
 jco transpile ghcr.io/actpkg/sqlite:latest -o dist/
 ```
 
-Same component. Same tool. Four deployments. Whatever new transport
-shows up next, the component doesn't change.
+Same component, same tool, four deployments. Whatever new transport shows up next, the component doesn't change.
 
 ## Writing one
 
@@ -146,31 +104,18 @@ mod component {
 }
 ```
 
-`cargo build --target wasm32-wasip2 --release` + `act-build pack` and
-you have a `.wasm` that speaks MCP, HTTP, and the CLI. `#[act_tool]`
-derives the JSON Schema from the function signature; `#[act_component]`
-emits the WIT export. Python has the same shape with `@component` /
-`@tool` decorators on top of [`componentize-py`](https://github.com/bytecodealliance/componentize-py).
+`cargo build --target wasm32-wasip2 --release` + `act-build pack` and you have a `.wasm` that speaks MCP, HTTP, and the CLI. `#[act_tool]` derives the JSON Schema from the function signature; `#[act_component]` emits the WIT export. Python has the same shape with `@component` / `@tool` decorators on top of [`componentize-py`](https://github.com/bytecodealliance/componentize-py).
 
 ## Where this is
 
 Early, and deliberately narrow.
 
-The core spec — [act:core@0.3.0](https://github.com/actcore/act-spec/blob/main/wit/act-core.wit) — is a WIT world with three async functions. The
-host ships as `act` on npm and cargo. Eleven components are published
-on `ghcr.io/actpkg`: sqlite, http-client, openapi-bridge, mcp-bridge,
-crypto, encoding, filesystem, random, time, openwallet, python-eval.
-Rust and Python SDKs are live; JavaScript via componentize-js is [blocked on upstream async-export support](https://github.com/bytecodealliance/ComponentizeJS/issues/335).
+The core spec — [act:core@0.3.0](https://github.com/actcore/act-spec/blob/main/wit/act-core.wit) — is a WIT world with three async functions. The host ships as `act` on npm and cargo. Eleven components are published on `ghcr.io/actpkg`: sqlite, http-client, openapi-bridge, mcp-bridge, crypto, encoding, filesystem, random, time, openwallet, python-eval. Rust and Python SDKs are live; JavaScript via componentize-js is [blocked on upstream async-export support](https://github.com/bytecodealliance/ComponentizeJS/issues/335).
 
 Follow-up posts coming on:
 
-- The 0.5 capability / policy layer in more detail.
-- The `rmcp` bridge (a thin shim over the official MCP crate instead
-  of the hand-rolled JSON-RPC dispatcher we had before).
-- Distribution stories — signed SBOMs, reproducible builds, the
-  artifact lifecycle from `just build` to `actpkg.dev`.
+- The capability / policy layer in depth — declaration-as-ceiling, DNS-level deny-CIDR, per-hop redirect re-check, ancestor traversal, and what goes wrong when any of those is missing.
+- The `rmcp` bridge (a thin shim over the official MCP crate instead of the hand-rolled JSON-RPC dispatcher we had before).
+- Distribution — signed SBOMs, reproducible builds, the artifact lifecycle from `just build` to `actpkg.dev`.
 
-If you write MCP servers, build agent tooling, or work on the
-component model, we'd love your thoughts. Start at [actcore.dev/docs](https://actcore.dev/docs/),
-browse [github.com/actcore](https://github.com/actcore), or ping us
-in the Bytecode Alliance Zulip.
+If you write MCP servers, build agent tooling, or work on the component model, we'd love your thoughts. Start at [actcore.dev/docs](https://actcore.dev/docs/), browse [github.com/actcore](https://github.com/actcore), or ping us in the Bytecode Alliance Zulip.
