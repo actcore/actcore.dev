@@ -8,7 +8,6 @@ tags:
   - webassembly
   - mcp
   - openapi
-  - sessions
 ---
 
 The previous posts focused on what ACT *is* — sandboxed components, one
