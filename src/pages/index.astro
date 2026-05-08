@@ -4,7 +4,7 @@ import Landing from '../layouts/Landing.astro';
 
 <Landing
 	title="ACT — Agent Component Tools"
-	description="Universal tool components built on WebAssembly. One .wasm file — agents, apps, CLI, browser."
+	description="Hardened AI toolchain. Sandboxed components, signed artifacts, capability ceilings, full provenance — for AI agents in environments where 'works on my machine' isn't enough."
 >
 	<!-- Background grid -->
 	<div class="grid-bg" aria-hidden="true"></div>
@@ -32,14 +32,14 @@ import Landing from '../layouts/Landing.astro';
 			</div>
 
 			<h1 class="hero-title">
-				<span class="title-line">Universal tool</span>
-				<span class="title-line accent">components</span>
+				<span class="title-line">Hardened AI</span>
+				<span class="title-line accent">toolchain</span>
 			</h1>
 
 			<p class="hero-subtitle">
-				One <code>.wasm</code> file. Agents, apps, CLI, browsers.
+				Sandboxed components. Signed artifacts. Capability ceilings.
 				<br />
-				Sandboxed. Portable. Self-documenting.
+				For AI agents in environments where <em>works on my machine</em> isn't enough.
 			</p>
 
 			<div class="hero-actions">
@@ -104,45 +104,45 @@ import Landing from '../layouts/Landing.astro';
 		<div class="contrast-inner">
 			<div class="contrast-card problem">
 				<div class="contrast-label">The problem</div>
-				<h2>Tool distribution is broken</h2>
+				<h2>Third-party tools come with full access</h2>
 				<ul>
 					<li>
 						<span class="li-icon">&#10005;</span>
-						npm install + right Node.js + native deps
+						<code>npx</code> / <code>uvx</code> / <code>curl | bash</code> run as you
 					</li>
 					<li>
 						<span class="li-icon">&#10005;</span>
-						Works on my machine, breaks on yours
+						SSH keys, .env, browser cookies all reachable
 					</li>
 					<li>
 						<span class="li-icon">&#10005;</span>
-						Full OS access by default
+						No declared bounds, no enforced ceiling
 					</li>
 					<li>
 						<span class="li-icon">&#10005;</span>
-						Only serves one consumer (MCP only)
+						Provenance opaque — what's actually running?
 					</li>
 				</ul>
 			</div>
 			<div class="contrast-card solution">
 				<div class="contrast-label">The ACT way</div>
-				<h2>One binary, runs everywhere</h2>
+				<h2>Bounded blast radius, by construction</h2>
 				<ul>
 					<li>
 						<span class="li-icon check">&#10003;</span>
-						Single <code>.wasm</code> file, zero dependencies
+						Sandboxed by wasmtime — zero ambient access
+					</li>
+					<li>
+						<span class="li-icon check">&#10003;</span>
+						Capability ceiling declared at build time, enforced by host
+					</li>
+					<li>
+						<span class="li-icon check">&#10003;</span>
+						Signed OCI artifacts with attested provenance
 					</li>
 					<li>
 						<span class="li-icon check">&#10003;</span>
 						Deterministic — same SHA256 on every machine
-					</li>
-					<li>
-						<span class="li-icon check">&#10003;</span>
-						Sandboxed with explicit capability grants
-					</li>
-					<li>
-						<span class="li-icon check">&#10003;</span>
-						Serves agents, apps, CLI, and browsers
 					</li>
 				</ul>
 			</div>
@@ -159,8 +159,8 @@ import Landing from '../layouts/Landing.astro';
 					<h3>Write</h3>
 					<p>Build your tool in Rust, Python, Go, C++, or any language that compiles to WebAssembly.</p>
 					<div class="step-code">
-						<pre><code><span class="kw">#[act_tool]</span>
-<span class="kw">fn</span> <span class="fn">search</span>(query: String) -&gt; Vec&lt;Result&gt; &#123;</code></pre>
+						<pre><code><span class="kw">#[act_tool]</span>(description = <span class="str">"Search the index"</span>, read_only)
+<span class="kw">fn</span> <span class="fn">search</span>(query: String) -&gt; ActResult&lt;String&gt; &#123;</code></pre>
 					</div>
 				</div>
 				<div class="step-connector" aria-hidden="true">
@@ -185,13 +185,12 @@ import Landing from '../layouts/Landing.astro';
 				</div>
 				<div class="step">
 					<div class="step-number">03</div>
-					<h3>Run everywhere</h3>
-					<p>Serve over MCP for AI agents, HTTP for apps, or embed directly. Same binary.</p>
+					<h3>Ship</h3>
+					<p>Push to an OCI registry. Signed by GitHub Actions attestation. Pull-and-run on any host with one command.</p>
 					<div class="step-code">
-						<pre><code>$ act serve my-tool.wasm
-$ act mcp my-tool.wasm
-$ act call my-tool.wasm search <span class="flag">\</span>
-    <span class="flag">--args</span> <span class="str">'&#123;"query":"rust"&#125;'</span></code></pre>
+						<pre><code>$ <span class="kw">oras push</span> ghcr.io/me/my-tool:1.0 my-tool.wasm
+$ act run ghcr.io/me/my-tool:1.0 <span class="flag">--mcp</span> <span class="flag">\</span>
+    <span class="flag">--http-policy</span> <span class="str">allowlist</span> <span class="flag">--http-allow</span> <span class="str">api.example.com</span></code></pre>
 					</div>
 				</div>
 			</div>
@@ -212,27 +211,47 @@ $ act call my-tool.wasm search <span class="flag">\</span>
 						</svg>
 					</div>
 					<h3>Sandboxed</h3>
-					<p>WASM isolation with explicit capability grants. No filesystem, network, or OS access unless you allow it.</p>
+					<p>WASM isolation with zero ambient access. No filesystem, no outbound network, no syscall surface — only what the operator explicitly grants.</p>
 				</div>
 				<div class="feature-card">
 					<div class="feature-icon">
 						<svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-							<path d="M4 14h6M18 14h6M14 4v6M14 18v6" stroke="var(--amber-500)" stroke-width="1.5" stroke-linecap="round"/>
-							<circle cx="14" cy="14" r="5" stroke="var(--amber-500)" stroke-width="1.5"/>
+							<path d="M3 14L14 3l11 11M14 3v22" stroke="var(--amber-500)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+							<rect x="6" y="14" width="16" height="11" stroke="var(--amber-500)" stroke-width="1.5" stroke-dasharray="2 2"/>
 						</svg>
 					</div>
-					<h3>Multi-runtime</h3>
-					<p>One component serves MCP agents, REST APIs, CLI tools, and browser apps. No rewrites.</p>
+					<h3>Capability ceiling</h3>
+					<p>Components declare what they need at build time. Operators grant what they're willing to give. The host enforces the intersection — neither side can escalate past the other.</p>
 				</div>
 				<div class="feature-card">
 					<div class="feature-icon">
 						<svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-							<path d="M7 10l7-6 7 6M7 18l7 6 7-6" stroke="var(--amber-500)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-							<line x1="14" y1="4" x2="14" y2="24" stroke="var(--amber-500)" stroke-width="1.5" stroke-dasharray="2 3"/>
+							<path d="M14 2L4 6v8c0 6 4 10 10 12 6-2 10-6 10-12V6L14 2z" stroke="var(--amber-500)" stroke-width="1.5" stroke-linejoin="round"/>
+							<path d="M9 14l3 3 7-7" stroke="var(--amber-500)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
 						</svg>
 					</div>
-					<h3>Streaming</h3>
-					<p>Built on WASI Preview 3. Async streams are first-class — real-time results, not polling.</p>
+					<h3>Signed lineage</h3>
+					<p>Every published component carries a GitHub Actions attestation linking artifact to source commit. Verifiable provenance, end-to-end.</p>
+				</div>
+				<div class="feature-card">
+					<div class="feature-icon">
+						<svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+							<circle cx="14" cy="14" r="10" stroke="var(--amber-500)" stroke-width="1.5"/>
+							<path d="M9 14l3 3 7-7" stroke="var(--amber-500)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+						</svg>
+					</div>
+					<h3>Reproducible</h3>
+					<p>Deterministic <code>.wasm</code> output — same SHA256 on every CPU, every host. Audit once, run anywhere, prove it's the same code.</p>
+				</div>
+				<div class="feature-card">
+					<div class="feature-icon">
+						<svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+							<path d="M14 4L4 9v10l10 5 10-5V9L14 4z" stroke="var(--amber-500)" stroke-width="1.5" stroke-linejoin="round"/>
+							<path d="M4 9l10 5 10-5M14 14v10" stroke="var(--amber-500)" stroke-width="1" stroke-dasharray="2 2"/>
+						</svg>
+					</div>
+					<h3>Self-documenting</h3>
+					<p>Schemas, descriptions, usage hints, examples, embedded agent skills — all baked into the binary. Agents (and humans) read it without running the component.</p>
 				</div>
 				<div class="feature-card">
 					<div class="feature-icon">
@@ -245,27 +264,7 @@ $ act call my-tool.wasm search <span class="flag">\</span>
 						</svg>
 					</div>
 					<h3>Any language</h3>
-					<p>Rust, Python, Go, C++, JS — anything that compiles to WebAssembly becomes an ACT component.</p>
-				</div>
-				<div class="feature-card">
-					<div class="feature-icon">
-						<svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-							<path d="M14 4L4 9v10l10 5 10-5V9L14 4z" stroke="var(--amber-500)" stroke-width="1.5" stroke-linejoin="round"/>
-							<path d="M4 9l10 5 10-5M14 14v10" stroke="var(--amber-500)" stroke-width="1" stroke-dasharray="2 2"/>
-						</svg>
-					</div>
-					<h3>Self-documenting</h3>
-					<p>Schemas, descriptions, usage hints, examples — documentation is part of the binary. Agents read it natively.</p>
-				</div>
-				<div class="feature-card">
-					<div class="feature-icon">
-						<svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-							<circle cx="14" cy="14" r="10" stroke="var(--amber-500)" stroke-width="1.5"/>
-							<path d="M9 14l3 3 7-7" stroke="var(--amber-500)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-						</svg>
-					</div>
-					<h3>Reproducible</h3>
-					<p>Deterministic WASM binary — same SHA256 everywhere. Audit, verify, trust.</p>
+					<p>Rust, Python, Go, C++, JS — anything that compiles to WebAssembly. The toolchain doesn't care; the security model is identical across.</p>
 				</div>
 			</div>
 		</div>
