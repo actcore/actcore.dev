@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="500" viewBox="0 0 1500 500">
+  <defs>
+    <pattern id="grid" width="60" height="60" patternUnits="userSpaceOnUse">
+      <path d="M 60 0 L 0 0 0 60" fill="none" stroke="rgba(255,255,255,0.025)" stroke-width="1"/>
+    </pattern>
+    <radialGradient id="glow" cx="0.3" cy="0.6" r="0.6">
+      <stop offset="0%" stop-color="#f59e0b" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="#f59e0b" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1500" height="500" fill="#08080c"/>
+  <rect width="1500" height="500" fill="url(#grid)"/>
+  <rect width="1500" height="500" fill="url(#glow)"/>
+
+  <text x="290" y="225" font-family="'Syne','Inter','Helvetica Neue',Arial,sans-serif"
+        font-size="100" font-weight="800" fill="#ffffff" letter-spacing="-0.035em">Hardened AI</text>
+  <text x="290" y="335" font-family="'Syne','Inter','Helvetica Neue',Arial,sans-serif"
+        font-size="100" font-weight="800" fill="#f59e0b" letter-spacing="-0.035em">toolchain.</text>
+
+  <text x="290" y="410" font-family="'Instrument Sans','Inter','Helvetica Neue',Arial,sans-serif"
+        font-size="24" font-weight="400" fill="rgba(255,255,255,0.7)" letter-spacing="-0.01em">Sandboxed wasm components. Capability ceilings. Signed artifacts.</text>
+
+  <text x="1430" y="450" text-anchor="end"
+        font-family="'DM Mono','JetBrains Mono','IBM Plex Mono','Consolas',monospace"
+        font-size="44" font-weight="500" fill="#f59e0b" letter-spacing="-0.02em">act()</text>
+</svg>
