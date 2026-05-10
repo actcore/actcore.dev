@@ -57,6 +57,12 @@ export default defineConfig({
 						{ slug: 'docs/reference/std-keys' },
 					],
 				},
+				{
+					label: 'Security',
+					items: [
+						{ slug: 'docs/security/csa-framework-mapping' },
+					],
+				},
 			],
 			customCss: ['./src/styles/custom.css'],
 			head: [

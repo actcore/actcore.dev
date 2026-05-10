@@ -1,0 +1,126 @@
+---
+title: CSA MCP Security framework mapping
+description: How ACT maps onto the Cloud Security Alliance MCP Security Working Group's hardening framework — area by area, with shipped vs planned status for every control.
+---
+
+The [Cloud Security Alliance MCP Security Working Group](https://modelcontextprotocol-security.io/) publishes the only public hardening framework that addresses Model Context Protocol servers and the wider class of components that AI agents call. Its structure splits controls into four tiers — **foundational**, **deployment**, **operational**, **advanced** — and provides a vocabulary that procurement, compliance, and security teams already use.
+
+This page maps each control area to the concrete capability inside ACT that delivers it. It is honest about what is shipped today, what is planned, and what is deliberately out of scope. For the framework itself, see the [WG repository](https://github.com/ModelContextProtocol-Security).
+
+## Foundational
+
+### Provenance verification
+
+| | |
+|---|---|
+| Status | Shipped |
+| ACT capability | GitHub Actions attestation; source repository pinned in every artifact |
+
+Every component published under `ghcr.io/actpkg` is built by [`actions/attest`](https://github.com/actions/attest) inside the upstream component's CI. The attestation binds the OCI manifest digest to the workflow run, the commit, and the repository — verifiable with `gh attestation verify`. The component's source repo URL is also embedded in the `act:component` custom section, which the host reads without execution.
+
+### Code integrity auditing
+
+| | |
+|---|---|
+| Status | Partial — reproducible-build infrastructure shipped; LLM-audit + dependency scanning planned |
+| ACT capability | Deterministic `wasm32-wasip2` build outputs; signed publish via `act-build push` |
+
+Component builds produce byte-identical `.wasm` artifacts across runs given the same source and toolchain, which is what makes attestation meaningful. The `act-build push` subcommand emits a [CNCF Wasm OCI Artifact](https://tag-runtime.cncf.io/wgs/wasm/deliverables/wasm-oci-artifact/) conformant manifest with a config blob carrying `architecture`, `os`, `layerDigests`, and component-level exports/imports — so any registry-side tooling that understands the spec can audit the artifact without pulling the layer. LLM-driven code audit, Socket/Snyk dependency scanning, and SBOM publication are on the roadmap.
+
+## Deployment
+
+### Runtime isolation
+
+| | |
+|---|---|
+| Status | Shipped |
+| ACT capability | `wasmtime` component sandbox; declared capability imports |
+
+Components run inside a [`wasmtime`](https://wasmtime.dev) virtual machine that enforces memory safety and instruction-level isolation. This is strictly stronger than container isolation: a wasm component cannot make a syscall that wasn't explicitly imported through WASI. There is no kernel attack surface to escape — the component physically cannot express the operation. See [Policy & sandbox](/docs/host/policy/) for the runtime-grant side of the model.
+
+### Traffic mediation
+
+| | |
+|---|---|
+| Status | Shipped |
+| ACT capability | `wasi:http` allow/deny lists; DNS-layer CIDR deny; per-redirect re-check |
+
+Every outbound HTTP request is gated by host policy along five axes: host, scheme, method, port, and DNS-resolved IP. CIDR-based deny lists block private ranges and metadata services (`169.254.169.254/32`) before they leave the sandbox. Each hop of a redirect chain is re-checked against the same policy — a 302 to a denied host fails mid-chain instead of silently succeeding. See [Network policy](/docs/host/policy/#network).
+
+## Operational
+
+### Secrets management
+
+| | |
+|---|---|
+| Status | Shipped |
+| ACT capability | `act:sessions` open-session args with host-side schema validation |
+
+Credentials never live in per-call metadata where every agent invocation can see them. Stateful components declare an open-session argument schema via [`get-open-session-args-schema`](https://github.com/actcore/act-spec/blob/main/spec/ACT-SESSIONS.md); the host validates the args against the schema and injects credentials into the wasm instance once at session open. The agent only ever sees an opaque session-id afterward. See [the auth design rationale](https://github.com/actcore/act-spec/blob/main/spec/ACT-AUTH.md).
+
+### Observability & logging
+
+| | |
+|---|---|
+| Status | Partial — tracing shipped; structured audit logs planned |
+| ACT capability | `tracing` output via `--log-level`; host-side denial events |
+
+The host emits structured `tracing` events for component load, tool invocation, and policy denials. A structured audit-log emission format (one line per tool call, redaction-aware) is on the roadmap — see [project issue tracker](https://github.com/actcore/act-cli/issues).
+
+### Backup & versioning
+
+| | |
+|---|---|
+| Status | Shipped (delegated to OCI registry) |
+| ACT capability | Immutable OCI tags; content-addressable retrieval by digest |
+
+Components are referenced by `ghcr.io/actpkg/<name>:<version>` and resolvable by digest (`@sha256:...`). The host caches pulled components by reference at `~/.cache/act/components/`, so the running artifact is always traceable to a registry-tagged version.
+
+## Advanced
+
+### Policy enforcement
+
+| | |
+|---|---|
+| Status | Shipped |
+| ACT capability | Capability ceiling (build-time declaration ∩ runtime grant) |
+
+This is ACT's signature control. Every component declares the capabilities it requires in its `act.toml` (`[std.capabilities."wasi:filesystem"]`, `[std.capabilities."wasi:http"]`, etc.); the operator grants what they're willing to give at run time. The effective policy is the intersection: a permissive operator cannot escalate past the component's stated intent, and a lazy component cannot silently reach past the operator's grants. See [Policy & sandbox](/docs/host/policy/).
+
+### Payments / wallet security
+
+| | |
+|---|---|
+| Status | Experimental preview |
+| ACT capability | `openwallet` component — reference implementation against [Open Wallet Standard](https://openwallet.sh/) |
+
+The [`openwallet`](https://github.com/actpkg/openwallet) component implements OWS via the upstream `ows-core` and `ows-signer` crates. Distributed as a `wasi:filesystem`-bounded sandboxed component with declared capabilities. Marked as preview/demo, not a production wallet — see the component README. (OWS at `openwallet.sh` is independent from the OpenWallet Foundation at `openwallet.foundation`; the latter focuses on verifiable credentials.)
+
+### Lifecycle management
+
+| | |
+|---|---|
+| Status | Shipped |
+| ACT capability | `act:sessions/session-provider` — `open-session` / `close-session` |
+
+Stateful components opt into [`act:sessions@0.1.0`](https://github.com/actcore/act-spec/blob/main/spec/ACT-SESSIONS.md), a three-function WIT interface that hands explicit lifecycle control to the host. The host keeps the wasm instance alive while sessions are open and closes whatever's still open before tearing the instance down. Auth, parsed-spec caching, and live-connection state all live behind this boundary.
+
+## Roadmap
+
+The framework areas marked **partial** above translate to concrete in-flight work:
+
+- **Structured audit-log emission** — line-per-tool-call output, redaction-aware, machine-parsable.
+- **Cosign-based supply chain signing on top of GH attestation** — for non-GitHub registries and detached signatures.
+- **LLM-driven code audit + dependency vulnerability scanning** integrated into the `actpkg.dev` curation pipeline.
+- **SBOM publication** alongside every component artifact.
+- **Capability-attenuation API** — host operators can issue a strict sub-policy of the granted ceiling to a specific agent session.
+
+## Engage
+
+Engineering and procurement contact for the framework itself runs through the WG, not through ACT:
+
+- [WG home](https://modelcontextprotocol-security.io/)
+- [WG GitHub organisation](https://github.com/ModelContextProtocol-Security) — discussions, vulnerability database, audit database
+- [WG bi-weekly meeting calendar](https://modelcontextprotocol-security.io/#meetings)
+
+If you're evaluating ACT against this framework for a procurement or compliance review, the [act-spec](https://github.com/actcore/act-spec) repository is the normative source for every claim on this page. Issues, "this looks like what I'd want for X but Y is missing" reports, and gaps you spot in the mapping above are welcome at [github.com/actcore/act-spec/discussions](https://github.com/actcore/act-spec/discussions).
