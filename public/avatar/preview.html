@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>ACT avatar — preview</title>
+  <style>
+    body{background:#1a1a1f;color:#eee;font-family:system-ui,sans-serif;margin:0;padding:48px}
+    h1{font-weight:500;font-size:20px;color:#aaa;margin:0 0 32px}
+    .row{display:flex;gap:48px;align-items:flex-end;margin-bottom:64px;flex-wrap:wrap}
+    .col{display:flex;flex-direction:column;align-items:center;gap:8px}
+    .label{font-size:13px;color:#888;font-family:ui-monospace,monospace}
+    .name{font-size:18px;color:#f59e0b;font-weight:600;margin-top:24px;font-family:ui-monospace,monospace}
+    img{display:block;border-radius:9999px}
+    .sq img{border-radius:22%}
+    .sizes{display:flex;gap:24px;align-items:flex-end}
+  </style>
+</head>
+<body>
+  <h1>X / BlueSky avatar — three variants. Avatar slots are usually circular; comparison shows both circle and rounded-square crops at typical feed sizes.</h1>
+
+  <div class="row">
+    <div class="col">
+      <div class="name">A · wordmark</div>
+      <div class="sizes">
+        <div class="col"><img src="a-wordmark.svg" width="200" height="200" alt=""><div class="label">200</div></div>
+        <div class="col"><img src="a-wordmark.svg" width="80" height="80" alt=""><div class="label">80 (timeline)</div></div>
+        <div class="col"><img src="a-wordmark.svg" width="40" height="40" alt=""><div class="label">40 (notif)</div></div>
+        <div class="col sq"><img src="a-wordmark.svg" width="80" height="80" alt=""><div class="label">80 sq</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col">
+      <div class="name">B · mark only ()</div>
+      <div class="sizes">
+        <div class="col"><img src="b-mark.svg" width="200" height="200" alt=""><div class="label">200</div></div>
+        <div class="col"><img src="b-mark.svg" width="80" height="80" alt=""><div class="label">80 (timeline)</div></div>
+        <div class="col"><img src="b-mark.svg" width="40" height="40" alt=""><div class="label">40 (notif)</div></div>
+        <div class="col sq"><img src="b-mark.svg" width="80" height="80" alt=""><div class="label">80 sq</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col">
+      <div class="name">C · wordmark + glow</div>
+      <div class="sizes">
+        <div class="col"><img src="c-wordmark-glow.svg" width="200" height="200" alt=""><div class="label">200</div></div>
+        <div class="col"><img src="c-wordmark-glow.svg" width="80" height="80" alt=""><div class="label">80 (timeline)</div></div>
+        <div class="col"><img src="c-wordmark-glow.svg" width="40" height="40" alt=""><div class="label">40 (notif)</div></div>
+        <div class="col sq"><img src="c-wordmark-glow.svg" width="80" height="80" alt=""><div class="label">80 sq</div></div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

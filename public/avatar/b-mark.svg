@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <rect width="1024" height="1024" rx="220" fill="#08080c"/>
+  <text x="512" y="660" text-anchor="middle"
+        font-family="'DM Mono','JetBrains Mono','IBM Plex Mono','Consolas',monospace"
+        font-weight="500" font-size="500" fill="#f59e0b" letter-spacing="-0.04em">()</text>
+</svg>
