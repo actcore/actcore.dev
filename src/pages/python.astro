@@ -1,0 +1,318 @@
+---
+import '../styles/site-tailwind.css';
+import SiteNav from '../components/site/SiteNav.astro';
+import SiteFooter from '../components/site/SiteFooter.astro';
+import PythonPlayground from '../components/python/PythonPlayground.svelte';
+
+const title = 'Real pandas on your CSV, running in this tab — ACT';
+const description =
+	"Every tool is a signed, capability-sandboxed component that can touch only the file you hand it. python-env runs real numpy/pandas in your browser in a WASI sandbox — no server, no upload, no install.";
+
+const transports = [
+	{
+		tag: '--mcp',
+		title: 'In your agent',
+		body: 'Claude, Cursor, or any MCP client calls',
+		code: 'exec',
+		accent: false,
+	},
+	{
+		tag: 'act call',
+		title: 'On the CLI',
+		body: 'Pass the CSV as an argument, get the tool result out. Scriptable.',
+		accent: false,
+	},
+	{
+		tag: ':8080',
+		title: 'Over HTTP',
+		body: 'Same component, served as a sandboxed endpoint.',
+		accent: false,
+	},
+	{
+		tag: 'this tab ←',
+		title: 'In the browser',
+		body: 'What you just ran. No server round-trip at all.',
+		accent: true,
+	},
+];
+---
+
+<!doctype html>
+<html lang="en" class="px-scope">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>{title}</title>
+		<meta name="description" content={description} />
+		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link
+			href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,400;0,500;1,400&family=Space+Grotesk:wght@400;500;600;700&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap"
+			rel="stylesheet"
+		/>
+	</head>
+	<body class="px-scope relative overflow-x-hidden bg-background font-body text-foreground antialiased selection:bg-primary/28 selection:text-white">
+		<div
+			aria-hidden="true"
+			class="pointer-events-none fixed inset-0 z-0 bg-[length:64px_64px] bg-[linear-gradient(rgba(255,255,255,.015)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.015)_1px,transparent_1px)]"
+		>
+		</div>
+		<div
+			aria-hidden="true"
+			class="pointer-events-none absolute top-[-80px] left-1/2 z-0 h-[640px] w-[900px] -translate-x-1/2 bg-[radial-gradient(ellipse_at_center,rgba(245,158,11,.07)_0%,transparent_68%)]"
+		>
+		</div>
+
+		<SiteNav />
+
+		<!-- HERO -->
+		<section class="relative z-10 mx-auto max-w-[1120px] px-6 pt-20 pb-8 text-center sm:pt-24">
+			<h1
+				class="mx-auto mb-6 max-w-[15ch] font-display text-[clamp(2.4rem,6vw,4.4rem)] leading-[1.02] font-bold tracking-[-0.035em]"
+			>
+				Real pandas on your CSV —<br />
+				<span class="text-accent">running in this tab.</span><br />
+				<span class="font-bold text-muted-foreground">Nothing uploaded. No install.</span>
+			</h1>
+			<p class="mx-auto mb-10 max-w-[44ch] text-[1.12rem] leading-relaxed text-muted-foreground">
+				Every tool is a signed, capability-sandboxed component that can touch{' '}
+				<span class="text-foreground">only the file you hand it</span>.
+			</p>
+		</section>
+
+		<!-- DEMO PANEL — the hero centerpiece -->
+		<section class="relative z-10 mx-auto max-w-[720px] px-6 pb-4">
+			<PythonPlayground client:load />
+		</section>
+
+		<!-- ACT-TWO SUBLINE tease -->
+		<section class="relative z-10 mx-auto max-w-[720px] px-6 pt-5 pb-16 text-center">
+			<p class="text-[0.95rem] text-muted-foreground">
+				Don't want to write it? <span class="text-foreground">A local model can</span> — calling the same sandboxed
+				tool.
+			</p>
+		</section>
+
+		<!-- BREADTH / TRANSPORTS -->
+		<section id="how" class="relative z-10 border-t border-border bg-surface">
+			<div class="mx-auto max-w-[1120px] px-6 py-18">
+				<div class="mb-4 text-center font-mono text-xs tracking-[0.14em] text-accent uppercase">
+					One artifact · every host
+				</div>
+				<h2
+					class="mx-auto mb-11 max-w-[24ch] text-center font-display text-[clamp(1.6rem,3.5vw,2.2rem)] leading-tight font-bold tracking-tight"
+				>
+					The same signed artifact runs over <span class="text-accent">MCP, CLI, HTTP</span>, or right in the
+					browser.
+				</h2>
+				<div class="grid grid-cols-2 gap-4 md:grid-cols-4">
+					{
+						transports.map((t) => (
+							<div
+								class:list={[
+									'rounded-[10px] border p-5 transition-colors',
+									t.accent
+										? 'border-primary/30 bg-gradient-to-b from-primary/6 to-elevated'
+										: 'border-border bg-elevated hover:border-primary/25',
+								]}
+							>
+								<div class="mb-2.5 font-mono text-[0.7rem] text-accent">{t.tag}</div>
+								<div class="mb-1 font-display text-base font-bold">{t.title}</div>
+								<div class="text-[0.82rem] leading-relaxed text-muted-foreground">
+									{t.code ? (
+										<>
+											{t.body} <span class="font-mono text-accent/90">{t.code}</span>.
+										</>
+									) : (
+										t.body
+									)}
+								</div>
+							</div>
+						))
+					}
+				</div>
+				<p class="mt-6 text-center font-mono text-[0.78rem] text-fainter-foreground">
+					written in any of ~10 languages ·{' '}
+					<span class="text-faint-foreground">same SHA256 on any CPU, any host</span>
+				</p>
+			</div>
+		</section>
+
+		<!-- PYODIDE SECTION -->
+		<section id="pyodide" class="relative z-10 mx-auto max-w-[1120px] px-6 py-20">
+			<div class="mb-4 text-center font-mono text-xs tracking-[0.14em] text-accent uppercase">
+				The question you're already asking
+			</div>
+			<h2 class="mb-3 text-center font-display text-[clamp(1.6rem,3.5vw,2.2rem)] font-bold tracking-tight">
+				&ldquo;Isn't this just Pyodide?&rdquo;
+			</h2>
+			<p class="mx-auto mb-12 max-w-[52ch] text-center leading-relaxed text-muted-foreground">
+				No — and we're honest about where Pyodide is ahead. The difference is{' '}
+				<span class="text-foreground">isolation</span> and <span class="text-foreground">portability</span>, not raw
+				Python.
+			</p>
+
+			<div class="grid grid-cols-1 gap-5 md:grid-cols-2">
+				<div class="rounded-xl border border-border bg-gradient-to-br from-destructive/4 to-transparent p-7">
+					<div class="mb-4.5 font-mono text-xs tracking-[0.12em] text-destructive uppercase">Pyodide</div>
+					<div class="mb-4 font-display text-[1.15rem] font-bold">Built for Python↔JS interop</div>
+					<ul class="flex flex-col gap-2.5">
+						<li class="flex gap-2.5 text-sm leading-relaxed text-muted-foreground">
+							<span class="shrink-0 text-destructive">✕</span>
+							<span
+								>{' '}<span class="font-mono text-[#f0a]">from js import document</span>,{' '}
+								<span class="font-mono text-foreground/80">js.fetch</span>, DOM &amp; globalThis all work.</span
+							>
+						</li>
+						<li class="flex gap-2.5 text-sm leading-relaxed text-muted-foreground">
+							<span class="shrink-0 text-destructive">✕</span>
+							<span>{' '}Not a sandbox for untrusted, AI-written code.</span>
+						</li>
+						<li class="flex gap-2.5 text-sm leading-relaxed text-muted-foreground">
+							<span class="shrink-0 text-success">✓</span>
+							<span>{' '}More compiled packages (SciPy, sklearn), maturity, JS interop.</span>
+						</li>
+					</ul>
+				</div>
+				<div class="rounded-xl border border-primary/18 bg-gradient-to-br from-primary/5 to-transparent p-7">
+					<div class="mb-4.5 font-mono text-xs tracking-[0.12em] text-accent uppercase">act · python-env</div>
+					<div class="mb-4 font-display text-[1.15rem] font-bold">Built to be sealed &amp; portable</div>
+					<ul class="flex flex-col gap-2.5">
+						<li class="flex gap-2.5 text-sm leading-relaxed text-muted-foreground">
+							<span class="shrink-0 text-success">✓</span>
+							<span
+								>{' '}Zero ambient authority — no <span class="font-mono text-foreground/80">js</span>, no DOM, no
+								arbitrary network (pypi only, for{' '}
+								<span class="font-mono text-accent/90">micropip</span>). It can't escape.</span
+							>
+						</li>
+						<li class="flex gap-2.5 text-sm leading-relaxed text-muted-foreground">
+							<span class="shrink-0 text-success">✓</span>
+							<span
+								>{' '}The <span class="font-semibold text-foreground">same signed component</span> runs in your agent
+								over MCP / CLI / HTTP.</span
+							>
+						</li>
+						<li class="flex gap-2.5 text-sm leading-relaxed text-muted-foreground">
+							<span class="shrink-0 text-accent">≈</span>
+							<span
+								>{' '}Runtime pure-Python install is <span class="text-foreground">parity</span> — we use the same{' '}
+								<span class="font-mono text-accent/90">micropip</span>.</span
+							>
+						</li>
+					</ul>
+				</div>
+			</div>
+			<p class="mx-auto mt-7 max-w-[56ch] text-center font-mono text-[0.78rem] leading-relaxed text-fainter-foreground">
+				Pyodide-adjacent, not a reinvention. The difference is isolation + portability.
+			</p>
+		</section>
+
+		<!-- ADOPT CTA -->
+		<section id="adopt" class="relative z-10 border-t border-border bg-surface">
+			<div class="mx-auto max-w-[720px] px-6 py-20 text-center">
+				<h2 class="mb-2.5 font-display text-[clamp(1.6rem,3.5vw,2.1rem)] font-bold tracking-tight">
+					Use it in your agent
+				</h2>
+				<p class="mx-auto mb-8 max-w-[46ch] leading-relaxed text-muted-foreground">
+					The <span class="font-mono text-accent/90">exec</span> tool you just ran{' '}
+					<span class="text-foreground">is the exact signed artifact</span> your agent calls — byte for byte.
+				</p>
+
+				<div
+					class="mx-auto mb-5 flex max-w-[780px] items-center gap-2.5 rounded-lg border border-border-medium bg-background py-1.5 pr-1.5 pl-4 text-left"
+				>
+					<span class="font-mono text-[0.9rem] text-accent">$</span>
+					<code
+						data-cmd-text
+						class="flex-1 overflow-x-auto font-mono text-[0.74rem] whitespace-nowrap text-foreground"
+						>claude mcp add python-env -- npx @actcore/act run ghcr.io/actpkg/python-env</code
+					>
+					<button
+						type="button"
+						data-copy-btn
+						data-cmd="claude mcp add python-env -- npx @actcore/act run ghcr.io/actpkg/python-env"
+						class="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-primary px-3.5 py-2 font-body text-[0.8rem] font-semibold text-primary-foreground transition-colors hover:bg-accent"
+					>
+						<span data-copy-label>Copy</span>
+					</button>
+				</div>
+
+				<div class="flex flex-wrap justify-center gap-3">
+					<a
+						href="https://github.com/actcore/act-cli"
+						target="_blank"
+						rel="noopener"
+						class="inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-3 font-body text-[0.92rem] font-bold text-primary-foreground transition-all hover:-translate-y-px hover:bg-accent hover:shadow-[0_6px_24px_rgba(245,158,11,0.3)]"
+					>
+						<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"
+							><path d="M12 2l2.9 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l7.1-1.01z" /></svg
+						>
+						Star on GitHub
+					</a>
+					<a
+						href="/docs/"
+						class="inline-flex items-center gap-1.5 rounded-lg border border-border-medium px-5 py-3 font-body text-[0.92rem] font-semibold text-foreground transition-colors hover:border-accent-600 hover:text-accent"
+						>Read the spec →</a
+					>
+				</div>
+			</div>
+		</section>
+
+		<!-- BROWSER ONBOARDING -->
+		<section class="relative z-10 mx-auto max-w-[720px] px-6 pt-12 pb-4">
+			<div class="rounded-xl border border-border bg-elevated px-6 py-5.5">
+				<div class="mb-4 flex items-center gap-2.5">
+					<span class="h-2 w-2 rounded-full bg-success shadow-[0_0_6px_rgba(52,211,153,0.5)]"></span>
+					<span data-browser-status class="font-mono text-[0.78rem] text-muted-foreground"
+						>Your browser is ready — WebGPU + wasm available</span
+					>
+				</div>
+				<div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
+					<div>
+						<div class="mb-1.5 font-mono text-xs text-success">Chrome / Edge</div>
+						<div class="text-[0.84rem] leading-relaxed text-muted-foreground">
+							Works out of the box — WebGPU + wasm are on by default.
+						</div>
+					</div>
+					<div>
+						<div class="mb-1.5 font-mono text-xs text-accent">Firefox · two flags</div>
+						<div class="text-[0.82rem] leading-relaxed text-muted-foreground">
+							Enable in <span class="font-mono text-foreground/80">about:config</span>:{' '}
+							<span class="font-mono text-accent/90">javascript.options.wasm_js_promise_integration</span> +{' '}
+							<span class="font-mono text-accent/90">dom.webgpu.enabled</span>. WebGPU is on for Win/macOS, off on
+							Firefox-Linux.
+						</div>
+					</div>
+				</div>
+			</div>
+		</section>
+
+		<SiteFooter />
+
+		<script>
+			const copyBtn = document.querySelector('[data-copy-btn]');
+			const copyLabel = document.querySelector('[data-copy-label]');
+			let copyTimer;
+			copyBtn?.addEventListener('click', async () => {
+				const cmd = copyBtn.dataset.cmd || '';
+				try {
+					await navigator.clipboard.writeText(cmd);
+				} catch {
+					// clipboard API unavailable — the command is still visible/selectable in the panel
+				}
+				if (copyLabel) copyLabel.textContent = '✓ Copied';
+				clearTimeout(copyTimer);
+				copyTimer = setTimeout(() => {
+					if (copyLabel) copyLabel.textContent = 'Copy';
+				}, 1800);
+			});
+
+			const status = document.querySelector('[data-browser-status]');
+			if (status && /firefox/i.test(navigator.userAgent)) {
+				status.textContent = 'Firefox detected — enable two flags below, then Run';
+			}
+		</script>
+	</body>
+</html>

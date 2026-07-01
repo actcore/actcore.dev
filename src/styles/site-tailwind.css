@@ -1,0 +1,153 @@
+@import 'tailwindcss';
+
+@custom-variant dark (&:is(.dark *));
+
+/* actcore.dev — shared Tailwind entry for Tailwind-based pages (currently
+   index.astro and python.astro; import per-page, not globally, so pages that
+   don't opt in stay untouched). Tokens mirror the ACT design system
+   (colors_and_type.css / marketing.css): amber brand ramp + near-black
+   marketing surface. Dark is the only mode. */
+:root {
+	--background: #08080c; /* --bg-primary */
+	--surface: #0e0e16; /* --bg-surface */
+	--elevated: #14141f; /* --bg-elevated */
+	--card: #181825; /* --bg-card */
+	--card-foreground: #e8e8ed;
+	--popover: #14141f;
+	--popover-foreground: #e8e8ed;
+
+	--foreground: #e8e8ed; /* --fg */
+	--muted-foreground: #9898aa; /* --fg-muted */
+	--faint-foreground: #6b6b80; /* --fg-muted-2 */
+	--fainter-foreground: #4d4d66; /* --fg-faint */
+
+	--primary: #f59e0b; /* --amber-500, marketing primary fill */
+	--primary-foreground: #1a1208;
+	--accent: #fbbf24; /* --amber-400, bright accent on dark */
+	--accent-600: #d97706;
+	--secondary: rgba(255, 255, 255, 0.06);
+	--secondary-foreground: #c4c4d0;
+	--muted: rgba(255, 255, 255, 0.03);
+
+	--destructive: #ef4444;
+	--success: #34d399;
+	--info: #a5b4fc;
+	--warning: #fbbf24;
+
+	--cap-fs: #6366f1;
+	--cap-http: #34d399;
+	--cap-sockets: #fb7185;
+	--cap-auth: #fbbf24;
+
+	--border: #1e1e30; /* --border-subtle */
+	--border-medium: #2a2a42;
+	--input: rgba(255, 255, 255, 0.1);
+	--ring: #d97706;
+
+	--radius: 0.75rem;
+
+	--font-display: 'Space Grotesk', sans-serif;
+	--font-body: 'Instrument Sans', sans-serif;
+	--font-mono: 'DM Mono', ui-monospace, monospace;
+
+	color-scheme: dark;
+}
+
+@theme inline {
+	--radius-sm: calc(var(--radius) - 6px);
+	--radius-md: calc(var(--radius) - 4px);
+	--radius-lg: var(--radius);
+	--radius-xl: calc(var(--radius) + 4px);
+	--radius-pill: 100px;
+
+	--color-background: var(--background);
+	--color-surface: var(--surface);
+	--color-elevated: var(--elevated);
+	--color-card: var(--card);
+	--color-card-foreground: var(--card-foreground);
+	--color-popover: var(--popover);
+	--color-popover-foreground: var(--popover-foreground);
+
+	--color-foreground: var(--foreground);
+	--color-muted-foreground: var(--muted-foreground);
+	--color-faint-foreground: var(--faint-foreground);
+	--color-fainter-foreground: var(--fainter-foreground);
+
+	--color-primary: var(--primary);
+	--color-primary-foreground: var(--primary-foreground);
+	--color-accent: var(--accent);
+	--color-accent-600: var(--accent-600);
+	--color-secondary: var(--secondary);
+	--color-secondary-foreground: var(--secondary-foreground);
+	--color-muted: var(--muted);
+
+	--color-destructive: var(--destructive);
+	--color-success: var(--success);
+	--color-info: var(--info);
+	--color-warning: var(--warning);
+
+	--color-cap-fs: var(--cap-fs);
+	--color-cap-http: var(--cap-http);
+	--color-cap-sockets: var(--cap-sockets);
+	--color-cap-auth: var(--cap-auth);
+
+	--color-border: var(--border);
+	--color-border-medium: var(--border-medium);
+	--color-input: var(--input);
+	--color-ring: var(--ring);
+
+	--font-display: var(--font-display);
+	--font-body: var(--font-body);
+	--font-mono: var(--font-mono);
+}
+
+@layer base {
+	.px-scope * {
+		@apply border-border outline-ring/50;
+	}
+	.px-scope {
+		@apply bg-background text-foreground;
+		font-family: var(--font-body);
+		-webkit-font-smoothing: antialiased;
+		-moz-osx-font-smoothing: grayscale;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.act-anim {
+		animation: none !important;
+	}
+}
+
+@keyframes act-seal {
+	0% {
+		transform: scale(0.92);
+		opacity: 0;
+	}
+	60% {
+		transform: scale(1.02);
+	}
+	100% {
+		transform: scale(1);
+		opacity: 1;
+	}
+}
+@keyframes act-rise {
+	from {
+		opacity: 0;
+		transform: translateY(10px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+@keyframes act-pulse {
+	0%,
+	100% {
+		opacity: 1;
+	}
+	50% {
+		opacity: 0.35;
+	}
+}

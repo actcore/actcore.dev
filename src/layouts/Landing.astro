@@ -28,12 +28,20 @@ const { title, description } = Astro.props;
 </html>
 
 <style is:global>
-	*,
-	*::before,
-	*::after {
-		margin: 0;
-		padding: 0;
-		box-sizing: border-box;
+	/* Layered as "base" so it composes correctly with Tailwind (site-tailwind.css)
+	   on pages that opt in — Tailwind's own utilities live in a later layer and
+	   must be able to override this reset. Unlayered CSS always wins over layered
+	   CSS regardless of specificity, so leaving this unlayered would silently
+	   break Tailwind margin/padding utilities (e.g. mx-auto, px-*) wherever this
+	   layout is used. */
+	@layer base {
+		*,
+		*::before,
+		*::after {
+			margin: 0;
+			padding: 0;
+			box-sizing: border-box;
+		}
 	}
 
 	:root {

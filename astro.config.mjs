@@ -2,93 +2,128 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 import mermaid from 'astro-mermaid';
+import svelte from '@astrojs/svelte';
+import tailwindcss from '@tailwindcss/vite';
 import { rehypeAsciinema } from './src/lib/rehype-asciinema.ts';
+import { fileURLToPath } from 'node:url';
+
+import sitemap from '@astrojs/sitemap';
+
+// @actcore/host imports jco's in-browser transpiler from a vendored bindgen at
+// this subpath, which jco-transpile does not list in its package `exports`, so
+// Vite/Rollup's resolver can't reach it — alias to the concrete file.
+const jcoBindgen = fileURLToPath(
+    new URL(
+        './node_modules/@bytecodealliance/jco-transpile/vendor/js-component-bindgen-component.js',
+        import.meta.url,
+    ),
+);
 
 export default defineConfig({
-	site: 'https://actcore.dev',
-	markdown: {
-		rehypePlugins: [rehypeAsciinema],
-	},
-	integrations: [
-		mermaid({
-			theme: 'dark',
-			autoTheme: true,
-		}),
-		starlight({
-			title: 'ACT',
-			description: 'Agent Component Tools — universal tool components built on WebAssembly',
-			social: [
-				{ icon: 'github', label: 'GitHub', href: 'https://github.com/actcore' },
-				{ icon: 'linkedin', label: 'LinkedIn', href: 'https://www.linkedin.com/company/actcore' },
-				{ icon: 'rss', label: 'Blog RSS', href: '/blog/rss.xml' },
-			],
-			sidebar: [
-				{
-					label: 'Start here',
-					items: [
-						{ slug: 'docs', label: 'What is ACT' },
-						{ slug: 'docs/install' },
-						{ slug: 'docs/run-first-component' },
-					],
-				},
-				{
-					label: 'Build a component',
-					items: [
-						{ slug: 'docs/build/rust' },
-						{ slug: 'docs/build/python' },
-						{ slug: 'docs/build/manifest' },
-						{ slug: 'docs/build/skills' },
-						{ slug: 'docs/build/testing' },
-					],
-				},
-				{
-					label: 'Host / run',
-					items: [
-						{ slug: 'docs/host/transports' },
-						{ slug: 'docs/host/policy' },
-						{ slug: 'docs/host/config' },
-					],
-				},
-				{
-					label: 'Reference',
-					items: [
-						{ slug: 'docs/reference/cli' },
-						{ slug: 'docs/reference/wit' },
-						{ slug: 'docs/reference/std-keys' },
-					],
-				},
-				{
-					label: 'Security',
-					items: [
-						{ slug: 'docs/security/csa-framework-mapping' },
-					],
-				},
-			],
-			customCss: ['./src/styles/custom.css'],
-			head: [
-				{
-					tag: 'link',
-					attrs: {
-						rel: 'preconnect',
-						href: 'https://fonts.googleapis.com',
-					},
-				},
-				{
-					tag: 'link',
-					attrs: {
-						rel: 'preconnect',
-						href: 'https://fonts.gstatic.com',
-						crossorigin: true,
-					},
-				},
-				{
-					tag: 'link',
-					attrs: {
-						rel: 'stylesheet',
-						href: 'https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&family=Instrument+Sans:wght@400;500;600;700&display=swap',
-					},
-				},
-			],
-		}),
-	],
+    site: 'https://actcore.dev',
+    markdown: {
+        rehypePlugins: [rehypeAsciinema],
+    },
+    vite: {
+        plugins: [tailwindcss()],
+        resolve: {
+            alias: {
+                '@bytecodealliance/jco-transpile/vendor/js-component-bindgen-component.js':
+                    jcoBindgen,
+            },
+        },
+        // @actcore/host runs jco's transpiler in a module Web Worker that
+        // dynamic-imports the bindgen core wasm — needs ES worker format.
+        worker: { format: 'es' },
+        // The vendored bindgen is a ~9MB minified module; sourcemap generation
+        // over it overflows rolldown's transform. We don't ship browser
+        // sourcemaps for the demo bundle anyway.
+        build: { sourcemap: false },
+        esbuild: { sourcemap: false },
+        optimizeDeps: {
+            exclude: ['@actcore/host', '@bytecodealliance/jco-transpile'],
+        },
+        // @actcore/host is a linked dep (file:../host-browser) outside root; its
+        // worker entry is fetched at runtime in dev.
+        server: { fs: { allow: ['..'] } },
+    },
+    integrations: [svelte(), mermaid({
+        theme: 'dark',
+        autoTheme: true,
+		}), starlight({
+        title: 'ACT',
+        description: 'Agent Component Tools — universal tool components built on WebAssembly',
+        social: [
+            { icon: 'github', label: 'GitHub', href: 'https://github.com/actcore' },
+            { icon: 'linkedin', label: 'LinkedIn', href: 'https://www.linkedin.com/company/actcore' },
+            { icon: 'rss', label: 'Blog RSS', href: '/blog/rss.xml' },
+        ],
+        sidebar: [
+            {
+                label: 'Start here',
+                items: [
+                    { slug: 'docs', label: 'What is ACT' },
+                    { slug: 'docs/install' },
+                    { slug: 'docs/run-first-component' },
+                ],
+            },
+            {
+                label: 'Build a component',
+                items: [
+                    { slug: 'docs/build/rust' },
+                    { slug: 'docs/build/python' },
+                    { slug: 'docs/build/manifest' },
+                    { slug: 'docs/build/skills' },
+                    { slug: 'docs/build/testing' },
+                ],
+            },
+            {
+                label: 'Host / run',
+                items: [
+                    { slug: 'docs/host/transports' },
+                    { slug: 'docs/host/policy' },
+                    { slug: 'docs/host/config' },
+                ],
+            },
+            {
+                label: 'Reference',
+                items: [
+                    { slug: 'docs/reference/cli' },
+                    { slug: 'docs/reference/wit' },
+                    { slug: 'docs/reference/std-keys' },
+                ],
+            },
+            {
+                label: 'Security',
+                items: [
+                    { slug: 'docs/security/csa-framework-mapping' },
+                ],
+            },
+        ],
+        customCss: ['./src/styles/custom.css'],
+        head: [
+            {
+                tag: 'link',
+                attrs: {
+                    rel: 'preconnect',
+                    href: 'https://fonts.googleapis.com',
+                },
+            },
+            {
+                tag: 'link',
+                attrs: {
+                    rel: 'preconnect',
+                    href: 'https://fonts.gstatic.com',
+                    crossorigin: true,
+                },
+            },
+            {
+                tag: 'link',
+                attrs: {
+                    rel: 'stylesheet',
+                    href: 'https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&family=Instrument+Sans:wght@400;500;600;700&display=swap',
+                },
+            },
+        ],
+		}), sitemap()],
 });
