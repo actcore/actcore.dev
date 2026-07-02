@@ -63,6 +63,51 @@ APAC,Gizmo,320`;
 export const DEFAULT_CODE =
   'import pandas as pd\ndf = pd.read_csv("sample.csv")\ndf.groupby("region").sales.sum()';
 
+// ── example scenarios (combobox in the demo panel) ───────────────────────────
+//
+// Both are pure local compute — no wasi:http capability needed. (An earlier
+// version had a third example demonstrating `install`-from-PyPI; pulled after
+// finding jco's browser/JSPI runtime has a severe per-byte throughput bug on
+// any real network response — see ACT-153. Local-only until that's fixed.)
+
+export interface Example {
+  id: string;
+  label: string;
+  code: string;
+}
+
+const IMAGE_CODE = [
+  'import io',
+  'from PIL import Image, ImageDraw',
+  'totals = df.groupby("region").sales.sum()',
+  'img = Image.new("RGB", (320, 200), "white")',
+  'draw = ImageDraw.Draw(img)',
+  'max_val = totals.max()',
+  'bar_w = 320 // len(totals)',
+  'for i, (region, val) in enumerate(totals.items()):',
+  '    h = int(val / max_val * 160)',
+  '    x0, x1 = i * bar_w + 15, (i + 1) * bar_w - 15',
+  '    y0, y1 = 180 - h, 180',
+  '    draw.rectangle([x0, y0, x1, y1], fill=(70, 130, 180))',
+  '    draw.text((x0, 185), region, fill="black")',
+  'buf = io.BytesIO()',
+  'img.save(buf, format="PNG")',
+  'show(buf.getvalue())',
+].join('\n');
+
+export const EXAMPLES: Example[] = [
+  {
+    id: 'pandas',
+    label: 'pandas — groupby sales by region',
+    code: DEFAULT_CODE,
+  },
+  {
+    id: 'image',
+    label: 'Pillow — render a chart, return a PNG',
+    code: IMAGE_CODE,
+  },
+];
+
 // ── types ───────────────────────────────────────────────────────────────────
 
 export interface ComponentHandle {
@@ -76,6 +121,8 @@ export interface ExecResult {
   text: string;
   ms: number;
   isError: boolean;
+  /** Set when the exec call emitted a binary content part (e.g. via `show()`). */
+  image?: { mime: string; dataUrl: string };
 }
 
 export type ProgressFn = (loaded: number, total: number) => void;
@@ -256,6 +303,7 @@ async function callExec(toolProvider: any, sessionId: string, code: string): Pro
   const events = result.tag === 'immediate' ? result.val : await drainStream(result.val);
   const parts: string[] = [];
   let isError = false;
+  let image: ExecResult['image'];
   for (const ev of events) {
     if (ev.tag === 'content') {
       const raw = ev.val.mimeType as unknown;
@@ -269,6 +317,10 @@ async function callExec(toolProvider: any, sessionId: string, code: string): Pro
         ev.val.data instanceof Uint8Array ? ev.val.data : new Uint8Array(ev.val.data as number[]);
       if (mime.startsWith('text/') || mime === 'application/json' || mime === 'text/plain') {
         parts.push(new TextDecoder().decode(data));
+      } else if (mime.startsWith('image/')) {
+        let binary = '';
+        for (const byte of data) binary += String.fromCharCode(byte);
+        image = { mime, dataUrl: `data:${mime};base64,${btoa(binary)}` };
       } else {
         parts.push(`(${mime}, ${data.length} bytes)`);
       }
@@ -281,7 +333,7 @@ async function callExec(toolProvider: any, sessionId: string, code: string): Pro
       parts.push(`${ev.val.kind ?? 'error'}: ${msg}`);
     }
   }
-  return { text: parts.join('\n').trim(), ms, isError };
+  return { text: parts.join('\n').trim(), ms, isError, image };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -10,8 +10,8 @@
 		injectCsv,
 		loadModel as engineLoadModel,
 		askModel,
-		DEFAULT_CODE,
 		SAMPLE_CSV,
+		EXAMPLES,
 		type ComponentHandle,
 	} from '../../lib/act-engine';
 
@@ -24,8 +24,10 @@
 	let progress = $state(0); // 0..1 download
 	let progressLabel = $state('');
 	let compiling = $state(false); // worker transpile after download
-	let code = $state(DEFAULT_CODE);
+	let selectedExample = $state(EXAMPLES[0].id);
+	let code = $state(EXAMPLES[0].code);
 	let result = $state('');
+	let resultImage = $state<{ mime: string; dataUrl: string } | undefined>(undefined);
 	let ms = $state(0);
 	let resultError = $state(false);
 	let error = $state('');
@@ -50,6 +52,13 @@
 		return (n / 1024 / 1024).toFixed(0);
 	}
 
+	function onExampleChange(e: Event) {
+		const id = (e.currentTarget as HTMLSelectElement).value;
+		selectedExample = id;
+		const ex = EXAMPLES.find((x) => x.id === id);
+		if (ex) code = ex.code;
+	}
+
 	async function run() {
 		if (phase !== 'idle') return;
 		phase = 'running';
@@ -65,6 +74,7 @@
 			if (csvText !== SAMPLE_CSV) await injectCsv(handle, csvText);
 			const r = await runExec(handle, code);
 			result = r.text;
+			resultImage = r.image;
 			ms = r.ms;
 			resultError = r.isError;
 			phase = 'done';
@@ -81,6 +91,7 @@
 		try {
 			const r = await runExec(handle, code);
 			result = r.text;
+			resultImage = r.image;
 			ms = r.ms;
 			resultError = r.isError;
 		} catch (e) {
@@ -159,6 +170,7 @@
 		progress = 0;
 		compiling = false;
 		result = '';
+		resultImage = undefined;
 		error = '';
 		model = 'hidden';
 		modelProgress = 0;
@@ -200,8 +212,22 @@
 			{/if}
 		</div>
 
+		<!-- example picker -->
+		<div class="flex items-center gap-2.5 px-[1.1rem] pt-3.5 font-mono text-[0.72rem] text-faint-foreground">
+			<span class="text-accent shrink-0">example</span>
+			<select
+				value={selectedExample}
+				onchange={onExampleChange}
+				class="w-full min-w-0 rounded-md border border-border bg-background px-2 py-1 text-foreground outline-none focus-visible:border-accent-600"
+			>
+				{#each EXAMPLES as ex}
+					<option value={ex.id}>{ex.label}</option>
+				{/each}
+			</select>
+		</div>
+
 		<!-- code argument -->
-		<div class="px-[1.1rem] pt-4 pb-2.5">
+		<div class="px-[1.1rem] pt-3 pb-2.5">
 			<div class="mb-2 flex items-baseline gap-2 font-mono text-[0.72rem] text-faint-foreground">
 				<span class="text-accent">code</span>
 				<span>: str</span>
@@ -273,6 +299,19 @@
 							</span>
 						{/if}
 					</div>
+
+					{#if resultImage}
+						<div
+							class="act-anim overflow-hidden rounded-lg border border-border bg-background p-3"
+							style="animation: act-rise .4s ease-out;"
+						>
+							<img
+								src={resultImage.dataUrl}
+								alt="exec() output ({resultImage.mime})"
+								class="mx-auto block max-w-full rounded"
+							/>
+						</div>
+					{/if}
 
 					<div class="flex items-center gap-2">
 						<Button variant="secondary" size="sm" onclick={rerun} disabled={rerunning} class="font-mono text-[0.74rem]">
