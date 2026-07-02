@@ -63,35 +63,6 @@ APAC,Gizmo,320`;
 export const DEFAULT_CODE =
   'import pandas as pd\ndf = pd.read_csv("sample.csv")\ndf.groupby("region").sales.sum()';
 
-// ── example scenarios (combobox in the demo panel) ───────────────────────────
-
-export interface Example {
-  id: string;
-  label: string;
-  code: string;
-}
-
-// `install` is python-env's own tool (see _pip.py), backed by wasi:http — not
-// reachable via `import micropip` in exec code (that hits micropip's default
-// Pyodide-oriented compat layer, which falls back to raw sockets the sandbox
-// correctly denies). `_pip` is already imported by app.py, so it's importable
-// here, and app.py's exec harness supports a top-level `await` (same
-// PyCF_ALLOW_TOP_LEVEL_AWAIT pattern CPython's own asyncio REPL and Pyodide's
-// console use), so `await _pip.install(...)` runs for real, no wrapper needed.
-export const EXAMPLES: Example[] = [
-  {
-    id: 'pandas',
-    label: 'pandas — groupby sales by region',
-    code: DEFAULT_CODE,
-  },
-  {
-    id: 'install',
-    label: 'install — pull humanize from pypi, then use it',
-    code:
-      'import _pip\nawait _pip.install("humanize")\nimport humanize\nhumanize.naturalsize(df.sales.sum() * 1000)',
-  },
-];
-
 // ── types ───────────────────────────────────────────────────────────────────
 
 export interface ComponentHandle {

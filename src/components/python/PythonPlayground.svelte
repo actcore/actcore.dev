@@ -10,8 +10,8 @@
 		injectCsv,
 		loadModel as engineLoadModel,
 		askModel,
+		DEFAULT_CODE,
 		SAMPLE_CSV,
-		EXAMPLES,
 		type ComponentHandle,
 	} from '../../lib/act-engine';
 
@@ -24,8 +24,7 @@
 	let progress = $state(0); // 0..1 download
 	let progressLabel = $state('');
 	let compiling = $state(false); // worker transpile after download
-	let selectedExample = $state(EXAMPLES[0].id);
-	let code = $state(EXAMPLES[0].code);
+	let code = $state(DEFAULT_CODE);
 	let result = $state('');
 	let ms = $state(0);
 	let resultError = $state(false);
@@ -49,13 +48,6 @@
 
 	function mb(n: number): string {
 		return (n / 1024 / 1024).toFixed(0);
-	}
-
-	function onExampleChange(e: Event) {
-		const id = (e.currentTarget as HTMLSelectElement).value;
-		selectedExample = id;
-		const ex = EXAMPLES.find((x) => x.id === id);
-		if (ex) code = ex.code;
 	}
 
 	async function run() {
@@ -208,22 +200,8 @@
 			{/if}
 		</div>
 
-		<!-- example picker -->
-		<div class="flex items-center gap-2.5 px-[1.1rem] pt-3.5 font-mono text-[0.72rem] text-faint-foreground">
-			<span class="text-accent shrink-0">example</span>
-			<select
-				value={selectedExample}
-				onchange={onExampleChange}
-				class="w-full min-w-0 rounded-md border border-border bg-background px-2 py-1 text-foreground outline-none focus-visible:border-accent-600"
-			>
-				{#each EXAMPLES as ex}
-					<option value={ex.id}>{ex.label}</option>
-				{/each}
-			</select>
-		</div>
-
 		<!-- code argument -->
-		<div class="px-[1.1rem] pt-3 pb-2.5">
+		<div class="px-[1.1rem] pt-4 pb-2.5">
 			<div class="mb-2 flex items-baseline gap-2 font-mono text-[0.72rem] text-faint-foreground">
 				<span class="text-accent">code</span>
 				<span>: str</span>
