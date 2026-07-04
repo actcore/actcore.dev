@@ -16,12 +16,15 @@
  * numpy/pandas, real capability sandbox, real local model.
  */
 import { runComponent } from '@actcore/web-runtime';
+import type { ConsentAsk, Verdict } from '@actcore/web-runtime';
 import { encode as cborEncode } from 'cbor2';
 import {
   CreateMLCEngine,
   type MLCEngineInterface,
   type InitProgressReport,
 } from '@mlc-ai/web-llm';
+
+export type { ConsentAsk, Verdict };
 
 // ── config ──────────────────────────────────────────────────────────────────
 
@@ -271,7 +274,10 @@ function setupCode(csv: string): string {
   ].join('\n');
 }
 
-export async function loadComponent(onProgress?: ProgressFn): Promise<ComponentHandle> {
+export async function loadComponent(
+  onProgress?: ProgressFn,
+  requestConsent?: (ask: ConsentAsk) => Promise<Verdict>,
+): Promise<ComponentHandle> {
   const bytes = await pullFromOci(onProgress);
   // in-tab transpile + instantiate in a WASI capability sandbox
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -280,6 +286,7 @@ export async function loadComponent(onProgress?: ProgressFn): Promise<ComponentH
     shimBase: SHIM_BASE_URL(),
     wasiHttpShimUrl: WASI_HTTP_SHIM_URL(),
     wasiSocketsShimUrl: WASI_SOCKETS_SHIM_URL(),
+    requestConsent,
   })) as any;
   const toolProvider = inst.toolProvider;
   const sessionProvider = inst.sessionProvider;
