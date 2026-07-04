@@ -1,7 +1,7 @@
 /**
  * Real engine for the python.astro demo.
  *
- * Wires the ACT browser host (@actcore/host) + WebLLM into three operations the
+ * Wires the ACT browser host (@actcore/web-runtime) + WebLLM into three operations the
  * PythonPlayground.svelte component drives:
  *   1. loadComponent() — fetch + instantiate python-env in a WASI sandbox, open
  *      a session, and inject the sample CSV so `pd.read_csv("sample.csv")` works
@@ -10,12 +10,12 @@
  *   3. loadModel() / askModel() — a small local LLM (WebLLM) that WRITES pandas
  *      and calls the SAME `exec` tool via prompt-based tool dispatch.
  *
- * NOTE on load performance: this uses @actcore/host's in-tab transpile. The
+ * NOTE on load performance: this uses @actcore/web-runtime's in-tab transpile. The
  * ~100MB component transpile is CPU-heavy on first load (see ACT-150 for the AOT
  * pre-transpile that removes the freeze). Everything here is real: real
  * numpy/pandas, real capability sandbox, real local model.
  */
-import { runComponent } from '@actcore/host';
+import { runComponent } from '@actcore/web-runtime';
 import { encode as cborEncode } from 'cbor2';
 import {
   CreateMLCEngine,
@@ -68,7 +68,7 @@ export const DEFAULT_CODE =
 // `pandas` and `image` are pure local compute. `install` demonstrates a real
 // `install`-from-PyPI over wasi:http — re-enabled after fixing ACT-153: jco's
 // `_lowerFlatOption` treated an empty trailers option (`undefined`) as `some`,
-// crashing wasi:http body completion (patched in @actcore/host's patches.ts,
+// crashing wasi:http body completion (patched in @actcore/web-runtime's patches.ts,
 // pending bytecodealliance/jco#1722), plus a per-byte body-drain throughput fix
 // in host-browser's wasi:http shim (43 KB body: an effective hang → ~70 ms).
 //

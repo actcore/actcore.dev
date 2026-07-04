@@ -9,16 +9,17 @@ import { fileURLToPath } from 'node:url';
 
 import sitemap from '@astrojs/sitemap';
 
-// @actcore/host imports jco's in-browser transpiler from a vendored bindgen at
+// @actcore/web-runtime imports jco's in-browser transpiler from a vendored bindgen at
 // this subpath, which jco-transpile does not list in its package `exports`, so
 // Vite/Rollup's resolver can't reach it — alias to the concrete file.
 //
-// TEMPORARY: point at a locally-built LTO bindgen instead of node_modules. The
-// published jco-transpile ships a non-LTO bindgen (release CI reused a build
-// cache; fixed upstream in bytecodealliance/jco#1737 but not yet released),
-// which is 8.9 MiB / ~56s vs this 3.1 MiB / ~7.5s. Revert to the node_modules
-// path once a fixed jco-transpile (> 0.4.1) publishes. See
-// vendor/jco-bindgen-lto/README.md.
+// TEMPORARY: point at a locally-built bindgen instead of node_modules. The
+// published jco-transpile ships the *debug* js-component-bindgen (wasm-opt'd)
+// instead of the release build — a debug/release obj/ filename collision in
+// jco's build:release clobbers the release component with the 132 MiB debug one.
+// Result: 8.9 MiB / ~56s vs this 3.1 MiB / ~7.5s. Revert to the node_modules
+// path once upstream fixes the collision and republishes. See
+// vendor/jco-bindgen-lto/README.md for the verified root cause + rebuild recipe.
 const jcoBindgen = fileURLToPath(
     new URL(
         './vendor/jco-bindgen-lto/js-component-bindgen-component.js',
@@ -39,7 +40,7 @@ export default defineConfig({
                     jcoBindgen,
             },
         },
-        // @actcore/host runs jco's transpiler in a module Web Worker that
+        // @actcore/web-runtime runs jco's transpiler in a module Web Worker that
         // dynamic-imports the bindgen core wasm — needs ES worker format.
         worker: { format: 'es' },
         // The vendored bindgen is a ~9MB minified module; sourcemap generation
@@ -48,9 +49,9 @@ export default defineConfig({
         build: { sourcemap: false },
         esbuild: { sourcemap: false },
         optimizeDeps: {
-            exclude: ['@actcore/host', '@bytecodealliance/jco-transpile'],
+            exclude: ['@actcore/web-runtime', '@bytecodealliance/jco-transpile'],
         },
-        // @actcore/host is a linked dep (file:../host-browser) outside root; its
+        // @actcore/web-runtime is a linked dep (file:../host-browser) outside root; its
         // worker entry is fetched at runtime in dev.
         server: { fs: { allow: ['..'] } },
     },

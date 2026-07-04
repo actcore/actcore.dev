@@ -2,7 +2,7 @@
 // can serve them same-origin:
 //   • preview2-shim/  — @bytecodealliance/preview2-shim browser build
 //                       (wasi:cli/clocks/filesystem/io/random)
-//   • host/shims/     — @actcore/host's own wasi:http + wasi:sockets shims
+//   • host/shims/     — @actcore/web-runtime's own wasi:http + wasi:sockets shims
 //                       (the sockets shim carries the resource classes the
 //                       preview2-shim browser build omits — now upstream in
 //                       host-browser, so nothing is patched here)
@@ -38,13 +38,13 @@ async function main() {
     console.warn('WARN: preview2-shim browser build not found; run npm install first');
   }
 
-  const hostShims = R('node_modules/@actcore/host/dist/shims');
+  const hostShims = R('node_modules/@actcore/web-runtime/dist/shims');
   if (await exists(hostShims)) {
     await mkdir(R('public/host'), { recursive: true });
     await cp(hostShims, R('public/host/shims'), { recursive: true });
     console.log('copied host shims (wasi-http + sockets)');
   } else {
-    console.warn('WARN: @actcore/host dist/shims not found; is host-browser built?');
+    console.warn('WARN: @actcore/web-runtime dist/shims not found; is host-browser built?');
   }
 }
 
