@@ -1,5 +1,16 @@
 import { type ErrorCode } from './wasi-http-internal.js';
 import type { Duration, FieldName, FieldValue, Method, Scheme, StatusCode, Result } from '../generated/interfaces/wasi-http-types.js';
+import type { ResourceOp } from '../policy/types.js';
+/**
+ * Minimal port the http PEP calls. Widened in the consent task to resolve
+ * `ask`; `runComponent` installs the real engine before instantiation.
+ * v1 limitation: a single module-level slot ⇒ one governed component per
+ * page realm at a time (see the design spec).
+ */
+export interface HttpPolicyPort {
+    decideHttp(op: ResourceOp): Promise<'allow' | 'deny'>;
+}
+export declare function __setActivePolicy(p: HttpPolicyPort | null): void;
 type Headers = Fields;
 type Trailers = Fields;
 export declare class Fields {

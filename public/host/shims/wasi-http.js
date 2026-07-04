@@ -5,6 +5,21 @@
 // Gen-types (`src/generated/interfaces/wasi-http-{client,types}.d.ts`) drive
 // the public shape; see the conformance check at the bottom of this file.
 import { internalError, FIELD_VALUE_RE, FORBIDDEN, TOKEN_RE, } from './wasi-http-internal.js';
+// `runComponent` sets the policy via its own (bundled) copy of this module,
+// while the guest's shim import may resolve to a different module instance
+// (e.g. loaded from a vendored `/host/shims/wasi-http.js` URL). A plain
+// module-local slot would leave the guest reading a null slot on its own
+// instance while `runComponent` sets the slot on a different instance — the
+// gate would never fire. Back the slot with `globalThis` (keyed by a shared
+// Symbol) so every instance of this module in the realm reads/writes the
+// same slot.
+const HTTP_POLICY_SLOT = Symbol.for('@actcore/web-runtime:httpPolicy');
+export function __setActivePolicy(p) {
+    globalThis[HTTP_POLICY_SLOT] = p ?? undefined;
+}
+function getActivePolicy() {
+    return (globalThis[HTTP_POLICY_SLOT] ?? null);
+}
 const TEXT_DECODER = new TextDecoder();
 function decodeFieldValue(v) {
     // FieldValue is Uint8Array per WIT, but be lenient if a string slips in.
@@ -364,6 +379,46 @@ export const client = {
             throw internalError('request missing authority');
         const path = request.getPathWithQuery() ?? '/';
         const url = `${scheme}://${authority}${path}`;
+        // Policy gate. Build the ResourceOp the native host builds, ask the engine,
+        // and deny by throwing a raw WIT error-code (never `new Error`).
+        const activePolicy = getActivePolicy();
+        if (activePolicy) {
+            let host;
+            let port;
+            const defaultPort = scheme === 'https' ? '443' : '80';
+            if (authority.startsWith('[')) {
+                // IPv6 literal: host is '[...]' (brackets kept, matching native
+                // uri.host()); an explicit port follows the closing bracket as
+                // ':port'.
+                const close = authority.indexOf(']');
+                host = authority.slice(0, close + 1);
+                const rest = authority.slice(close + 1);
+                port = rest.startsWith(':') ? rest.slice(1) : defaultPort;
+            }
+            else if (authority.includes(':')) {
+                host = authority.slice(0, authority.lastIndexOf(':'));
+                port = authority.slice(authority.lastIndexOf(':') + 1);
+            }
+            else {
+                host = authority;
+                port = defaultPort;
+            }
+            let decision;
+            try {
+                decision = await activePolicy.decideHttp({
+                    capId: 'wasi:http',
+                    key: `${host}:${port}`,
+                    action: method,
+                    attrs: { scheme },
+                });
+            }
+            catch {
+                throw internalError(`wasi:http policy error: ${host}:${port}`);
+            }
+            if (decision === 'deny') {
+                throw internalError(`wasi:http denied by policy: ${host}:${port}`);
+            }
+        }
         // `Headers` is locally aliased to `Fields`; use the global fetch class
         // explicitly to avoid shadowing.
         const fetchHeaders = new globalThis.Headers();
