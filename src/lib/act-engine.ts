@@ -65,10 +65,20 @@ export const DEFAULT_CODE =
 
 // ── example scenarios (combobox in the demo panel) ───────────────────────────
 //
-// Both are pure local compute — no wasi:http capability needed. (An earlier
-// version had a third example demonstrating `install`-from-PyPI; pulled after
-// finding jco's browser/JSPI runtime has a severe per-byte throughput bug on
-// any real network response — see ACT-153. Local-only until that's fixed.)
+// `pandas` and `image` are pure local compute. `install` demonstrates a real
+// `install`-from-PyPI over wasi:http — re-enabled after fixing ACT-153: jco's
+// `_lowerFlatOption` treated an empty trailers option (`undefined`) as `some`,
+// crashing wasi:http body completion (patched in @actcore/host's patches.ts,
+// pending bytecodealliance/jco#1722), plus a per-byte body-drain throughput fix
+// in host-browser's wasi:http shim (43 KB body: an effective hang → ~70 ms).
+//
+// `install` is python-env's own tool (see _pip.py), backed by wasi:http — not
+// reachable via `import micropip` in exec code (that hits micropip's default
+// Pyodide-oriented compat layer, which falls back to raw sockets the sandbox
+// correctly denies). `_pip` is already imported by app.py, so it's importable
+// here, and app.py's exec harness supports a top-level `await` (same
+// PyCF_ALLOW_TOP_LEVEL_AWAIT pattern CPython's own asyncio REPL and Pyodide's
+// console use), so `await _pip.install(...)` runs for real, no wrapper needed.
 
 export interface Example {
   id: string;
@@ -105,6 +115,12 @@ export const EXAMPLES: Example[] = [
     id: 'image',
     label: 'Pillow — render a chart, return a PNG',
     code: IMAGE_CODE,
+  },
+  {
+    id: 'install',
+    label: 'install — pull humanize from pypi, then use it',
+    code:
+      'import _pip\nawait _pip.install("humanize")\nimport humanize\nhumanize.naturalsize(df.sales.sum() * 1000)',
   },
 ];
 
