@@ -4,6 +4,7 @@
 	import { Textarea } from '../ui/textarea';
 	import { Input } from '../ui/input';
 	import { Progress } from '../ui/progress';
+	import ConsentDialog from './ConsentDialog.svelte';
 	import {
 		loadComponent,
 		runExec,
@@ -13,6 +14,8 @@
 		SAMPLE_CSV,
 		EXAMPLES,
 		type ComponentHandle,
+		type ConsentAsk,
+		type Verdict,
 	} from '../../lib/act-engine';
 
 	type Phase = 'idle' | 'running' | 'done';
@@ -33,6 +36,24 @@
 	let error = $state('');
 	let handle: ComponentHandle | null = null;
 	let rerunning = $state(false);
+
+	// ── consent prompt (wasi:http `ask` policy) ─────────────────────────────────
+	let consentAsk = $state<ConsentAsk | null>(null);
+	let consentResolve: ((v: Verdict) => void) | null = null;
+
+	function requestConsent(ask: ConsentAsk): Promise<Verdict> {
+		consentAsk = ask;
+		return new Promise((resolve) => {
+			consentResolve = resolve;
+		});
+	}
+
+	function onConsentDecision(v: Verdict) {
+		const r = consentResolve;
+		consentAsk = null;
+		consentResolve = null;
+		r?.(v);
+	}
 
 	// ── CSV state ─────────────────────────────────────────────────────────────
 	let csvName = $state('sample.csv');
@@ -70,7 +91,7 @@
 				progress = total ? loaded / total : 0;
 				progressLabel = `${mb(loaded)} / ${mb(total)} MB`;
 				if (loaded >= total && total > 0) compiling = true;
-			});
+			}, requestConsent);
 			if (csvText !== SAMPLE_CSV) await injectCsv(handle, csvText);
 			const r = await runExec(handle, code);
 			result = r.text;
@@ -445,4 +466,6 @@
 		This is the real thing — the <span class="text-faint-foreground">code</span> is the argument to the
 		<span class="text-faint-foreground">exec</span> tool; the output is its real result. Not a REPL, not a video.
 	</p>
+
+	<ConsentDialog ask={consentAsk} ondecision={onConsentDecision} />
 </div>

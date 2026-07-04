@@ -43,6 +43,10 @@
  * `network.Network` share the identical class the generated glue checks
  * `instanceof` against.
  */
+export interface SocketsPolicyPort {
+    noteSocketsDenied(): void;
+}
+export declare function __setSocketsPolicy(p: SocketsPolicyPort | null): void;
 declare function denyAccess(): never;
 declare class Network {
 }
