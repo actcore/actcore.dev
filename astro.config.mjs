@@ -12,9 +12,16 @@ import sitemap from '@astrojs/sitemap';
 // @actcore/host imports jco's in-browser transpiler from a vendored bindgen at
 // this subpath, which jco-transpile does not list in its package `exports`, so
 // Vite/Rollup's resolver can't reach it — alias to the concrete file.
+//
+// TEMPORARY: point at a locally-built LTO bindgen instead of node_modules. The
+// published jco-transpile ships a non-LTO bindgen (release CI reused a build
+// cache; fixed upstream in bytecodealliance/jco#1737 but not yet released),
+// which is 8.9 MiB / ~56s vs this 3.1 MiB / ~7.5s. Revert to the node_modules
+// path once a fixed jco-transpile (> 0.4.1) publishes. See
+// vendor/jco-bindgen-lto/README.md.
 const jcoBindgen = fileURLToPath(
     new URL(
-        './node_modules/@bytecodealliance/jco-transpile/vendor/js-component-bindgen-component.js',
+        './vendor/jco-bindgen-lto/js-component-bindgen-component.js',
         import.meta.url,
     ),
 );
