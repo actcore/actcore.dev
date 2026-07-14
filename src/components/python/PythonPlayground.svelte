@@ -17,10 +17,13 @@
 		type ConsentAsk,
 		type Verdict,
 	} from '../../lib/act-engine';
+	import { classifyResult, errorMessage, type DisplayResult } from '../../lib/python-result';
+	import { ConsentQueue } from '../../lib/consent-queue';
+	import { onDestroy } from 'svelte';
 
 	type Phase = 'idle' | 'running' | 'done';
 	type ModelPhase = 'hidden' | 'running' | 'done';
-	type Exchange = { q: string; code: string; result: string; error: boolean };
+	type Exchange = { q: string; code: string; display: DisplayResult };
 
 	// ── component / exec state ────────────────────────────────────────────────
 	let phase = $state<Phase>('idle');
@@ -29,31 +32,39 @@
 	let compiling = $state(false); // worker transpile after download
 	let selectedExample = $state(EXAMPLES[0].id);
 	let code = $state(EXAMPLES[0].code);
-	let result = $state('');
+	let display = $state<DisplayResult | null>(null);
 	let resultImage = $state<{ mime: string; dataUrl: string } | undefined>(undefined);
 	let ms = $state(0);
-	let resultError = $state(false);
 	let error = $state('');
 	let handle: ComponentHandle | null = null;
 	let rerunning = $state(false);
 
 	// ── consent prompt (wasi:http `ask` policy) ─────────────────────────────────
+	// micropip fires multiple concurrent asks (e.g. two for pypi.org:443 at once).
+	// A single-slot prompter would overwrite its one resolve and orphan the first
+	// ask's promise, hanging the JSPI-suspended guest forever. The queue coalesces
+	// same-host asks and never drops a resolve. See consent-queue.ts.
+	const consentQueue = new ConsentQueue<ConsentAsk, Verdict>();
 	let consentAsk = $state<ConsentAsk | null>(null);
-	let consentResolve: ((v: Verdict) => void) | null = null;
+
+	// Safe default when we must resolve a pending ask without a user decision.
+	const DENY_VERDICT: Verdict = { allow: false, remember: 'once' };
 
 	function requestConsent(ask: ConsentAsk): Promise<Verdict> {
-		consentAsk = ask;
-		return new Promise((resolve) => {
-			consentResolve = resolve;
+		return new Promise<Verdict>((resolve) => {
+			consentQueue.enqueue(ask, resolve);
+			consentAsk = consentQueue.current();
 		});
 	}
 
 	function onConsentDecision(v: Verdict) {
-		const r = consentResolve;
-		consentAsk = null;
-		consentResolve = null;
-		r?.(v);
+		// Resolve every waiter on the shown ask, then promote the next queued one.
+		consentAsk = consentQueue.decide(v);
 	}
+
+	// If the component is torn down while an ask is pending, deny it so no
+	// JSPI-suspended guest task is left waiting on an unresolved promise.
+	onDestroy(() => consentQueue.drain(DENY_VERDICT));
 
 	// ── CSV state ─────────────────────────────────────────────────────────────
 	let csvName = $state('sample.csv');
@@ -94,14 +105,22 @@
 			}, requestConsent);
 			if (csvText !== SAMPLE_CSV) await injectCsv(handle, csvText);
 			const r = await runExec(handle, code);
-			result = r.text;
+			display = classifyResult({ text: r.text, isError: r.isError }, r.denial);
 			resultImage = r.image;
 			ms = r.ms;
-			resultError = r.isError;
 			phase = 'done';
 		} catch (e) {
-			error = (e as Error).message || String(e);
+			// A thrown value may be a WIT-safe `{ tag, val }` error (e.g. the exec
+			// timeout), not a JS Error — extract a readable message either way.
+			error = errorMessage(e);
 			phase = 'idle';
+		} finally {
+			// An exec call only returns once the guest task is done, so any ask
+			// still queued here was ABANDONED (orphaned when a failing install
+			// unwound) — never a live prompt. Drain it so a leaked entry can't
+			// wedge the next run.
+			consentQueue.drain(DENY_VERDICT);
+			consentAsk = null;
 		}
 	}
 
@@ -111,14 +130,16 @@
 		error = '';
 		try {
 			const r = await runExec(handle, code);
-			result = r.text;
+			display = classifyResult({ text: r.text, isError: r.isError }, r.denial);
 			resultImage = r.image;
 			ms = r.ms;
-			resultError = r.isError;
 		} catch (e) {
-			error = (e as Error).message || String(e);
+			error = errorMessage(e);
 		} finally {
 			rerunning = false;
+			// Drain any ask abandoned by this call — see run()'s finally.
+			consentQueue.drain(DENY_VERDICT);
+			consentAsk = null;
 		}
 	}
 
@@ -135,7 +156,7 @@
 			});
 			model = 'done';
 		} catch (e) {
-			modelError = (e as Error).message || String(e);
+			modelError = errorMessage(e);
 			model = 'hidden';
 		}
 	}
@@ -146,10 +167,16 @@
 		asking = true;
 		try {
 			const r = await askModel(handle, q);
-			exchanges = [...exchanges, { q, code: r.code, result: r.result, error: r.isError }];
+			exchanges = [
+				...exchanges,
+				{ q, code: r.code, display: classifyResult({ text: r.result, isError: r.isError }, r.denial) },
+			];
 			prompt = '';
 		} catch (e) {
-			exchanges = [...exchanges, { q, code: '', result: (e as Error).message, error: true }];
+			exchanges = [
+				...exchanges,
+				{ q, code: '', display: { kind: 'error', text: errorMessage(e) } },
+			];
 		} finally {
 			asking = false;
 		}
@@ -190,7 +217,7 @@
 		phase = 'idle';
 		progress = 0;
 		compiling = false;
-		result = '';
+		display = null;
 		resultImage = undefined;
 		error = '';
 		model = 'hidden';
@@ -198,6 +225,10 @@
 		modelError = '';
 		prompt = '';
 		exchanges = [];
+		// Resolve any still-open consent prompt with deny so nothing dangles, and
+		// clear the modal.
+		consentQueue.drain(DENY_VERDICT);
+		consentAsk = null;
 		// keep the loaded component + session; just clear the UI. A fresh load
 		// isn't needed — the session persists and re-run works.
 	}
@@ -205,6 +236,11 @@
 	const progressPct = $derived(Math.round(progress * 100));
 	const modelPct = $derived(Math.round(modelProgress * 100));
 	const modelHidden = $derived(phase === 'done' && model === 'hidden');
+
+	// Narrow the classified result for the template: a policy DENIAL gets a clean
+	// banner; ok/error share the plain result line.
+	const denied = $derived(display?.kind === 'denied' ? display : null);
+	const shown = $derived(display && display.kind !== 'denied' ? display : null);
 </script>
 
 <div class="px-scope">
@@ -306,20 +342,36 @@
 			{:else}
 				<div class="flex flex-col gap-2.5">
 					<!-- result line -->
-					<div
-						class="act-anim flex items-start gap-2.5 rounded-lg border {resultError ? 'border-destructive/40' : 'border-border'} bg-background px-3.5 py-3 font-mono text-[0.86rem]"
-						style="animation: act-rise .4s ease-out;"
-					>
-						<span class="shrink-0 text-faint-foreground">{resultError ? 'error' : 'result'}</span>
-						<span class="whitespace-pre-wrap {resultError ? 'text-destructive' : 'text-foreground'}">{result}</span>
-						{#if !resultError}
-							<span class="ml-auto flex shrink-0 items-center gap-1.5 text-[0.76rem] text-success">
-								<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"
-									><path d="M20 6L9 17l-5-5" /></svg
-								>{ms} ms
-							</span>
-						{/if}
-					</div>
+					{#if denied}
+						<!-- policy DENIAL — honest, specific, no scraped micropip traceback -->
+						<div
+							class="act-anim flex flex-col gap-1 rounded-lg border border-destructive/40 bg-destructive/5 px-3.5 py-3 font-mono text-[0.86rem]"
+							style="animation: act-rise .4s ease-out;"
+						>
+							<div class="flex items-start gap-2 text-destructive">
+								<span class="shrink-0" aria-hidden="true">✕</span>
+								<span class="font-medium">{denied.title}</span>
+							</div>
+							<div class="pl-[1.4rem] text-[0.76rem] leading-relaxed text-faint-foreground">
+								{denied.detail}
+							</div>
+						</div>
+					{:else if shown}
+						<div
+							class="act-anim flex items-start gap-2.5 rounded-lg border {shown.kind === 'error' ? 'border-destructive/40' : 'border-border'} bg-background px-3.5 py-3 font-mono text-[0.86rem]"
+							style="animation: act-rise .4s ease-out;"
+						>
+							<span class="shrink-0 text-faint-foreground">{shown.kind === 'error' ? 'error' : 'result'}</span>
+							<span class="whitespace-pre-wrap {shown.kind === 'error' ? 'text-destructive' : 'text-foreground'}">{shown.text}</span>
+							{#if shown.kind === 'ok'}
+								<span class="ml-auto flex shrink-0 items-center gap-1.5 text-[0.76rem] text-success">
+									<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"
+										><path d="M20 6L9 17l-5-5" /></svg
+									>{ms} ms
+								</span>
+							{/if}
+						</div>
+					{/if}
 
 					{#if resultImage}
 						<div
@@ -430,8 +482,12 @@
 										<div><span class="text-faint-foreground">you&nbsp;&nbsp;&nbsp;→</span> <span class="text-foreground">{ex.q}</span></div>
 										<div class="mt-0.5"><span class="text-accent/90">model →</span> <span class="text-foreground">exec(code = {ex.code})</span></div>
 										<div class="mt-0.5 flex flex-wrap items-center gap-2.5">
-											<span class="text-faint-foreground">result</span> <span class="whitespace-pre-wrap {ex.error ? 'text-destructive' : 'text-foreground'}">{ex.result}</span>
-											{#if !ex.error}<span class="ml-auto text-[0.72rem] text-success">✓ ran sandboxed — still 0 capabilities</span>{/if}
+											{#if ex.display.kind === 'denied'}
+												<span class="text-destructive"><span aria-hidden="true">✕</span> {ex.display.title}</span>
+											{:else}
+												<span class="text-faint-foreground">result</span> <span class="whitespace-pre-wrap {ex.display.kind === 'error' ? 'text-destructive' : 'text-foreground'}">{ex.display.text}</span>
+												{#if ex.display.kind === 'ok'}<span class="ml-auto text-[0.72rem] text-success">✓ ran sandboxed — still 0 capabilities</span>{/if}
+											{/if}
 										</div>
 									</div>
 								{/each}

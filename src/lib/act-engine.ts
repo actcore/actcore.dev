@@ -16,8 +16,9 @@
  * numpy/pandas, real capability sandbox, real local model.
  */
 import { runComponent } from '@actcore/web-runtime';
-import type { ConsentAsk, Verdict } from '@actcore/web-runtime';
+import type { ConsentAsk, Verdict, AuditRecord } from '@actcore/web-runtime';
 import { encode as cborEncode } from 'cbor2';
+import { hostFromHostPort, type DenialInfo } from './python-result';
 import {
   CreateMLCEngine,
   type MLCEngineInterface,
@@ -25,6 +26,7 @@ import {
 } from '@mlc-ai/web-llm';
 
 export type { ConsentAsk, Verdict };
+export type { DenialInfo } from './python-result';
 
 // ── config ──────────────────────────────────────────────────────────────────
 
@@ -142,6 +144,13 @@ export interface ExecResult {
   isError: boolean;
   /** Set when the exec call emitted a binary content part (e.g. via `show()`). */
   image?: { mime: string; dataUrl: string };
+  /**
+   * Set when the runtime's capability policy DENIED a capability during this
+   * call (captured from the structured audit sink, not by scraping the Python
+   * traceback). Lets the UI render an honest denial banner instead of the
+   * misleading micropip "wrong package name" ValueError.
+   */
+  denial?: DenialInfo;
 }
 
 export type ProgressFn = (loaded: number, total: number) => void;
@@ -154,6 +163,22 @@ function cbor(v: unknown): Uint8Array {
 
 function sessionMeta(sessionId: string): Array<[string, Uint8Array]> {
   return [['std:session-id', cbor(sessionId)]];
+}
+
+// ── capability-denial capture (structured audit sink) ───────────────────────
+//
+// The runtime hands us a structured `AuditRecord` for every capability decision
+// via `runComponent`'s `onAudit`. exec calls are serialized (the UI gates on a
+// single in-flight run), so we latch denials seen during the current `callExec`
+// and attach them to that call's result — far more reliable than regex-matching
+// the traceback, which micropip rewrites into a "wrong package name" ValueError.
+
+let currentCallDenials: DenialInfo[] = [];
+
+/** Map a denial `AuditRecord` to a UI-facing `DenialInfo`, else null. */
+function denialFromAudit(r: AuditRecord): DenialInfo | null {
+  if (r.decision !== 'deny' && r.decision !== 'ask-deny') return null;
+  return { capId: r.capId, host: hostFromHostPort(r.op?.key), decision: r.decision };
 }
 
 // ── component load + session + CSV injection ────────────────────────────────
@@ -287,6 +312,10 @@ export async function loadComponent(
     wasiHttpShimUrl: WASI_HTTP_SHIM_URL(),
     wasiSocketsShimUrl: WASI_SOCKETS_SHIM_URL(),
     requestConsent,
+    onAudit: (r) => {
+      const d = denialFromAudit(r);
+      if (d) currentCallDenials.push(d);
+    },
   })) as any;
   const toolProvider = inst.toolProvider;
   const sessionProvider = inst.sessionProvider;
@@ -320,6 +349,7 @@ export async function injectCsv(h: ComponentHandle, csv: string): Promise<string
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function callExec(toolProvider: any, sessionId: string, code: string): Promise<ExecResult> {
+  currentCallDenials = []; // latch denials seen during THIS call only
   const t0 = performance.now();
   const result = await toolProvider.callTool('exec', cbor({ code }), sessionMeta(sessionId));
   const ms = Math.round(performance.now() - t0);
@@ -356,7 +386,12 @@ async function callExec(toolProvider: any, sessionId: string, code: string): Pro
       parts.push(`${ev.val.kind ?? 'error'}: ${msg}`);
     }
   }
-  return { text: parts.join('\n').trim(), ms, isError, image };
+  // A capability denial during this call wins over whatever the guest managed
+  // to write into `text` (micropip masks it as a "wrong package name" error).
+  const denial = currentCallDenials.length
+    ? currentCallDenials[currentCallDenials.length - 1]
+    : undefined;
+  return { text: parts.join('\n').trim(), ms, isError, image, denial };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -416,6 +451,7 @@ export interface AskResult {
   code: string;
   result: string;
   isError: boolean;
+  denial?: DenialInfo;
 }
 
 /** The model writes pandas and calls the same exec tool. Returns code + result. */
@@ -448,5 +484,5 @@ export async function askModel(h: ComponentHandle, question: string): Promise<As
   }
   if (!code) return { code: raw.trim(), result: '(model did not emit a tool call)', isError: true };
   const exec = await runExec(h, code);
-  return { code, result: exec.text, isError: exec.isError };
+  return { code, result: exec.text, isError: exec.isError, denial: exec.denial };
 }
