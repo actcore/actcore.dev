@@ -127,6 +127,12 @@ export const EXAMPLES: Example[] = [
     code:
       'import _pip\nawait _pip.install("humanize")\nimport humanize\nhumanize.naturalsize(df.sales.sum() * 1000)',
   },
+  {
+    id: 'escape',
+    label: 'escape — reach a non-PyPI host (denied by policy)',
+    code:
+      'import _pip\n# The sandbox may only reach PyPI. Ask it to fetch from another host —\n# the capability policy denies it before the request leaves your tab.\nawait _pip.install("https://example.com/anything-1.0-py3-none-any.whl")',
+  },
 ];
 
 // ── types ───────────────────────────────────────────────────────────────────
