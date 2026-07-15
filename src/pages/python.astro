@@ -264,25 +264,26 @@ const transports = [
 		<section class="relative z-10 mx-auto max-w-[720px] px-6 pt-12 pb-4">
 			<div class="rounded-xl border border-border bg-elevated px-6 py-5.5">
 				<div class="mb-4 flex items-center gap-2.5">
-					<span class="h-2 w-2 rounded-full bg-success shadow-[0_0_6px_rgba(52,211,153,0.5)]"></span>
+					<span
+						data-browser-dot
+						class="h-2 w-2 rounded-full bg-success shadow-[0_0_6px_rgba(52,211,153,0.5)]"
+					></span>
 					<span data-browser-status class="font-mono text-[0.78rem] text-muted-foreground"
 						>Your browser is ready — WebGPU + wasm available</span
 					>
 				</div>
 				<div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
 					<div>
-						<div class="mb-1.5 font-mono text-xs text-success">Chrome / Edge</div>
+						<div class="mb-1.5 font-mono text-xs text-success">Chrome / Edge 137+</div>
 						<div class="text-[0.84rem] leading-relaxed text-muted-foreground">
-							Works out of the box — WebGPU + wasm are on by default.
+							Works out of the box — wasm JSPI and WebGPU are on by default.
 						</div>
 					</div>
 					<div>
-						<div class="mb-1.5 font-mono text-xs text-accent">Firefox · two flags</div>
+						<div class="mb-1.5 font-mono text-xs text-success">Firefox 153+</div>
 						<div class="text-[0.82rem] leading-relaxed text-muted-foreground">
-							Enable in <span class="font-mono text-foreground/80">about:config</span>:{' '}
-							<span class="font-mono text-accent/90">javascript.options.wasm_js_promise_integration</span> +{' '}
-							<span class="font-mono text-accent/90">dom.webgpu.enabled</span>. WebGPU is on for Win/macOS, off on
-							Firefox-Linux.
+							Works out of the box — JSPI ships on by default since Firefox 153 (July 2026), no flags. The optional
+							local model also needs WebGPU: on for Windows and Apple-silicon macOS, not yet on Linux.
 						</div>
 					</div>
 				</div>
@@ -309,9 +310,17 @@ const transports = [
 				}, 1800);
 			});
 
+			// Feature-detect JSPI instead of sniffing the UA — Firefox ships it on by
+			// default since 153, so a "Firefox needs flags" branch is now just wrong.
 			const status = document.querySelector('[data-browser-status]');
-			if (status && /firefox/i.test(navigator.userAgent)) {
-				status.textContent = 'Firefox detected — enable two flags below, then Run';
+			const dot = document.querySelector('[data-browser-dot]');
+			if (typeof WebAssembly.promising !== 'function') {
+				if (status) {
+					status.textContent =
+						'This browser lacks wasm JSPI — use Chrome/Edge 137+ or Firefox 153+';
+				}
+				dot?.classList.remove('bg-success', 'shadow-[0_0_6px_rgba(52,211,153,0.5)]');
+				dot?.classList.add('bg-warning');
 			}
 		</script>
 	</body>
