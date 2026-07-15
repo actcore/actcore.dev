@@ -103,7 +103,7 @@ const transports = [
 				<h2
 					class="mx-auto mb-11 max-w-[24ch] text-center font-display text-[clamp(1.6rem,3.5vw,2.2rem)] leading-tight font-bold tracking-tight"
 				>
-					The same signed artifact runs over <span class="text-accent">MCP, CLI, HTTP</span>, or right in the
+					The same signed artifact runs over <span class="text-accent">MCP, the CLI</span>, or right in the
 					browser.
 				</h2>
 				<div class="grid grid-cols-2 gap-4 md:grid-cols-4">
@@ -133,8 +133,8 @@ const transports = [
 					}
 				</div>
 				<p class="mt-6 text-center font-mono text-[0.78rem] text-fainter-foreground">
-					written in any of ~10 languages ·{' '}
-					<span class="text-faint-foreground">same SHA256 on any CPU, any host</span>
+					written in any of 12 languages ·{' '}
+					<span class="text-faint-foreground">pinned by digest, signed to its build</span>
 				</p>
 			</div>
 		</section>
@@ -227,12 +227,12 @@ const transports = [
 					<code
 						data-cmd-text
 						class="flex-1 overflow-x-auto font-mono text-[0.74rem] whitespace-nowrap text-foreground"
-						>claude mcp add python-env -- npx @actcore/act run ghcr.io/actpkg/python-env</code
+						>claude mcp add python-env -- npx @actcore/act run actpkg.dev/library/python-env --mcp</code
 					>
 					<button
 						type="button"
 						data-copy-btn
-						data-cmd="claude mcp add python-env -- npx @actcore/act run ghcr.io/actpkg/python-env"
+						data-cmd="claude mcp add python-env -- npx @actcore/act run actpkg.dev/library/python-env --mcp"
 						class="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-primary px-3.5 py-2 font-body text-[0.8rem] font-semibold text-primary-foreground transition-colors hover:bg-accent"
 					>
 						<span data-copy-label>Copy</span>

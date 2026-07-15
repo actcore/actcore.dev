@@ -1,44 +1,119 @@
 ---
 title: Testing
-description: End-to-end test pattern used by every actpkg component — just + hurl + a live act server.
+description: End-to-end test pattern used by every published component — pytest driving the component through act run --mcp with a real MCP client.
 ---
 
-Every published `actpkg` component tests its tools end-to-end with the same pattern: boot the component under `act run --http`, then exercise every tool with [hurl](https://hurl.dev/). The fixture is a three-line `justfile` recipe; no per-component test harness.
+Every published component tests its tools end-to-end the same way: run the packed artifact under
+`act run --mcp` and drive it with a **real MCP client**, so what the tests observe is exactly what
+an agent observes. Both scaffolding templates generate this suite.
+
+:::note[This replaced an HTTP-based harness]
+Components used to be tested by booting `act run --http` and firing [hurl](https://hurl.dev/)
+requests at the ACT-HTTP REST endpoints. That binding was removed in 0.12.0 — see
+[Transports](/docs/host/transports/) — and the whole fleet moved to the MCP-driven suite below.
+:::
 
 ## The recipe
 
 ```makefile
-port := `npx get-port-cli`
-addr := "[::1]:" + port
-baseurl := "http://" + addr
-
-test:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    act run {{wasm}} --http --listen "{{addr}}" &
-    trap "kill $!" EXIT
-    npx wait-on -t 180s {{baseurl}}/info
-    npx @orangeopensource/hurl --test --variable "baseurl={{baseurl}}" e2e/*.hurl
+test: build
+    ACT="{{act}}" uv run --project e2e pytest e2e/ -v
 ```
 
-Key points:
+That's the entire justfile side. Everything else — the transport, the capability grants, the
+"is it actually packed?" check — lives in `e2e/conftest.py`, where it is reviewable code rather
+than an ever-growing command line.
 
-- `get-port-cli` avoids collisions when CI runs multiple components in parallel.
-- `wait-on` polls `/info` (a no-instantiation endpoint) until the server is ready.
-- `hurl` reads plain-text `.hurl` files — readable both by humans and as assertions.
+## The environment
 
-## A `hurl` test
+`e2e/pyproject.toml` is a virtual project (`package = false`), so `uv` builds an environment from
+the dependency list without installing your component directory as a distribution:
 
-```hurl
-# e2e/reverse.hurl
-POST {{baseurl}}/tools/reverse
-{"arguments": {"text": "hello"}}
-HTTP 200
-[Asserts]
-jsonpath "$.content[0].data" == "olleh"
+```toml
+[project]
+requires-python = ">=3.12"
+dependencies = ["fastmcp", "pytest", "pytest-asyncio", "pytest-timeout"]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+timeout = 300
+timeout_method = "thread"
 ```
 
-The ACT-HTTP wire format is documented in [ACT-HTTP](https://github.com/actcore/act-spec/blob/main/spec/ACT-HTTP.md). For quick tool calls during iteration, `act call` is usually faster:
+The timeout is deliberately generous: a hung test must fail the job rather than run until CI's
+own ceiling.
+
+## The fixtures
+
+`e2e/conftest.py` gives every test a connected MCP client:
+
+```python
+from fastmcp import Client
+from fastmcp.client.transports import StdioTransport
+
+GRANTS = ["--allow", "wasi:filesystem"]   # whatever the component declares
+
+@pytest.fixture
+async def client(act_command, wasm_path):
+    transport = StdioTransport(
+        command=act_command[0],
+        args=[*act_command[1:], "run", str(wasm_path), "--mcp", *GRANTS],
+        keep_alive=False,
+        log_file=LOG_FILE,
+    )
+    async with Client(transport) as connected:
+        yield connected
+```
+
+Four details that are easy to get wrong:
+
+- **Grants are mandatory in CI.** The default policy mode is `ask`, and a headless run has no
+  prompt channel, so it degrades to deny. Without the `--allow` flags the failure surfaces as a
+  capability denial that points anywhere except at the missing grant.
+- **The client fixture is function-scoped.** A component may keep state across calls within one
+  host process, so sharing a process between tests would let them leak into each other. A
+  genuinely stateless component can widen this.
+- **`act`'s audit trail goes to a log file.** It writes to stderr unconditionally and is *not*
+  governed by `RUST_LOG`, so left alone it floods the pytest output. The template captures it and
+  prints it back only when the run fails.
+- **Bound the connect separately.** `act run --mcp` instantiates the component before answering
+  `initialize`, so a heavy component takes seconds. The template wraps the handshake in its own
+  timeout so a stalled connect reports itself instead of consuming the whole test budget.
+
+## Checking the artifact is packed
+
+`cargo build` alone produces a `.wasm` with no `act:component` section — and an unpacked artifact
+declares no capability ceiling, so every grant is refused as "outside ceiling". The `wasm_path`
+fixture checks the section rather than just the file:
+
+```python
+probe = subprocess.run([*act_command, "inspect", "component-manifest", str(path)],
+                       capture_output=True, text=True)
+name = json.loads(probe.stdout or "{}").get("std", {}).get("name", "unknown")
+if name in ("", "unknown"):
+    pytest.fail(f"{path} is built but not packed -- run `just pack`")
+```
+
+## A test
+
+```python
+async def test_component_exposes_its_tools(client):
+    """A component with no tools is almost always a packaging mistake."""
+    tools = await client.list_tools()
+    assert len(tools) >= 1
+
+
+async def test_reverse(client):
+    result = await client.call_tool("reverse", {"text": "hello"})
+    assert result.content[0].text == "olleh"
+```
+
+## Quick iteration
+
+For a single call while you're still writing the tool, `act call` is faster than a test run:
 
 ```bash
 act call <wasm> reverse --args '{"text":"hello"}'
@@ -46,16 +121,6 @@ act call <wasm> reverse --args '{"text":"hello"}'
 
 ## CI
 
-The Rust and Python templates ship a `.github/workflows/ci.yml` that runs `just build` → `just test` → `just publish` (on `main`). On PRs only build+test run; publish only fires on `main` push.
-
-## Capability flags in tests
-
-If your component declares `wasi:filesystem` or `wasi:http`, the `test` recipe also needs runtime policy flags. SQLite's test recipe, for example:
-
-```makefile
-DB_DIR=$(mktemp -d)
-act run {{wasm}} --http --listen "{{addr}}" \
-  --fs-policy allowlist --fs-allow /dev/urandom --fs-allow "$DB_DIR" &
-```
-
-Ancestor directories on the way to an allowed path are implicitly traversable — you don't need to list each parent explicitly.
+Both templates ship a `.github/workflows/ci.yml` that runs `just build` → `just test` →
+`just publish`. On pull requests only build and test run; publish fires on a push to `main`, and
+the published artifact is then signed with keyless cosign via GitHub OIDC.

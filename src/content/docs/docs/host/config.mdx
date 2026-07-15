@@ -1,17 +1,10 @@
 ---
 title: Profiles & config
-description: Save host settings, policy, and per-component metadata in ~/.config/act/config.toml.
+description: Save host settings, capability grants, and per-component metadata in ~/.config/act/config.toml.
 ---
 
-The CLI reads `~/.config/act/config.toml` at startup. It holds host defaults and named **profiles** — per-component bundles of metadata + policy you can activate with `--profile <name>`.
-
-## Priority
-
-Later wins:
-
-```
-  CLI flags  >  --profile  >  global [policy] / [host]  >  CLI defaults
-```
+The CLI reads `~/.config/act/config.toml` at startup. It holds host defaults and named
+**profiles** — per-component bundles of grants and metadata you activate with `--profile <name>`.
 
 ## Layout
 
@@ -21,53 +14,88 @@ Later wins:
 listen = "[::1]:3000"
 log-level = "info"
 
+[audit]
+enabled = true            # the audit trail is on by default; this is how you turn it off
+detail = "rollup"         # "rollup" (default) or "full"
+
+# ── Runtime-wide policy baseline ────────────────────────────────────
 [policy]
-fs   = "deny"
-http = "allowlist"
+default = "ask"                   # deny | allowlist | open | ask
+"wasi:sockets" = "deny"           # shorthand: a bare mode string
+"db:*" = "deny"                   # `*`-suffix patterns match by prefix
 
-[policy.http.allow]
-# runtime-wide baseline: let any component reach the public API
-"api.example.com" = { scheme = "https", methods = ["GET", "POST"] }
+[policy."wasi:filesystem"]        # structured: mode + provider-defined constraints
+mode = "allowlist"
+allow = [{ path = "/data/**", mode = "rw" }]
+deny  = [{ path = "**/.ssh/**", mode = "ro" }]
 
-# -- per-component profile ------------------------------------
+[policy."wasi:http"]
+mode = "allowlist"
+allow = [{ host = "api.example.com", scheme = "https", methods = ["GET", "POST"] }]
+
+# ── Per-component profiles ──────────────────────────────────────────
 [profile.sqlite-dev]
-# metadata passed to list-tools / call-tool
-metadata = { database_path = "/Users/me/dev.sqlite" }
-
-[profile.sqlite-dev.policy]
-fs = { mode = "allowlist", allow = [
-  { path = "/Users/me/dev.sqlite", mode = "rw" },
-]}
+[profile.sqlite-dev.policy."wasi:filesystem"]
+mode = "allowlist"
+allow = [
+  { path = "/Users/me/dev/**", mode = "rw" },
+  { path = "/dev/urandom", mode = "ro" },
+]
 
 [profile.sqlite-prod]
-metadata = { database_path = "/var/lib/acme/prod.sqlite" }
-[profile.sqlite-prod.policy]
-fs = { mode = "allowlist", allow = [
-  { path = "/var/lib/acme/prod.sqlite", mode = "rw" },
-]}
+[profile.sqlite-prod.policy."wasi:filesystem"]
+mode = "allowlist"
+allow = [
+  { path = "/var/lib/acme/**", mode = "rw" },
+  { path = "/dev/urandom", mode = "ro" },
+]
 ```
+
+Keys under `[policy]` are **capability ids** — `wasi:filesystem`, `wasi:http`, `wasi:sockets`,
+`act:credentials`, or a semantic class a component declares — or `*`-suffix patterns. Each value
+is either a shorthand mode string or a `{ mode, allow, deny }` table, with the same
+provider-defined constraint shapes as the CLI's `--grant`. See
+[Policy & sandbox](/docs/host/policy/).
+
+## Priority
+
+Grants merge, later winning:
+
+```
+  global [policy]  <  profile [policy]  <  CLI --grant / --allow / --deny
+```
+
+Within a layer, an id resolves by **exact id > longest `*`-prefix > `default`**. An unset
+`default` inherits from the layer below; absent from every layer, it is `ask`.
 
 ## Using a profile
 
 ```bash
-act run ghcr.io/actpkg/sqlite:latest --mcp --profile sqlite-dev
+act run actpkg.dev/library/sqlite --mcp --profile sqlite-dev \
+  --session-args '{"database_path": "/Users/me/dev/app.sqlite"}'
 ```
 
-The host merges the profile's `metadata` with any `--metadata` on the CLI (CLI wins per-key), and intersects the profile's policy with the component's declared capabilities.
+A profile can carry `policy` and `metadata`. It **cannot** carry session args — those are a
+per-connection concern and stay on the command line (or come from the credential store). A
+profile's `metadata` merges with any `-m` / `--metadata-json` on the CLI, per key, CLI winning.
 
 ## Overriding the config path
 
 ```bash
-act run <wasm> --config ./my-config.toml
+act run <component> --mcp --config ./my-config.toml
 ```
 
 Useful in CI or per-project setups.
 
-## What lives here
+## What belongs here
 
-Good fits: credentials, long allow-lists, hostnames, database paths, per-team network policy baselines.
+**Good fits:** capability grants you'd otherwise retype, long allow-lists, network baselines for
+a team, host paths, non-secret per-deployment metadata.
 
-Don't-put-here: secrets that rotate (use `--metadata-file` with a symlink that changes), component versions (pin the OCI tag instead).
+**Not here:** secrets. Credentials live in the credential store — put them there with
+`act secret set`, or let `act login` prompt for what a component declares it needs, and the
+component receives them through session args rather than through config. Component versions don't
+belong here either; pin the OCI tag at the call site.
 
 ## Example: MCP client setup
 
@@ -75,11 +103,13 @@ Don't-put-here: secrets that rotate (use `--metadata-file` with a symlink that c
 {
   "mcpServers": {
     "sqlite-dev": {
-      "command": "act",
-      "args": ["run", "ghcr.io/actpkg/sqlite:latest", "--mcp", "--profile", "sqlite-dev"]
+      "command": "npx",
+      "args": ["@actcore/act", "run", "actpkg.dev/library/sqlite", "--mcp",
+               "--profile", "sqlite-dev",
+               "--session-args", "{\"database_path\":\"/Users/me/dev/app.sqlite\"}"]
     }
   }
 }
 ```
 
-Your MCP client never needs to know about paths or policy flags — they live in the profile.
+Your MCP client never needs to know about grants — they live in the profile.

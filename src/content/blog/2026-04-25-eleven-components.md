@@ -5,17 +5,23 @@ pubDate: 2026-04-25
 author: actcore
 ---
 
+> **Update (2026-08):** the per-class policy flags used below — `--fs-policy`,
+> `--fs-allow`, `--http-policy`, `--http-allow` and friends — were replaced by a uniform
+> grant model (`--grant`, `--allow`, `--deny`), and the default mode is now `ask` rather
+> than deny. The capability-ceiling model this post describes is unchanged; only the flag
+> spelling is. See [Policy & sandbox](/docs/host/policy/).
+
 The core ACT spec is small: a tool-dispatch interface and a few CBOR
 shapes on the wire, with stateful capabilities (sessions, events,
 resources) layered on as separate opt-in packages. But a protocol is
 only interesting if people actually write for it. Here's what's on
-`ghcr.io/actpkg` today, grouped by kind.
+`actpkg.dev/library` today, grouped by kind.
 
 Every component is MIT-or-Apache-2.0, published with signed
 attestations, and runnable with:
 
 ```bash
-npx @actcore/act info ghcr.io/actpkg/<name>:latest --tools
+npx @actcore/act info actpkg.dev/library/<name>:latest --tools
 ```
 
 ## Data & storage
@@ -28,7 +34,7 @@ with the wasi-sdk toolchain; the database file is whatever path the
 operator grants via `--fs-allow`.
 
 ```bash
-npx @actcore/act run ghcr.io/actpkg/sqlite:latest --mcp \
+npx @actcore/act run actpkg.dev/library/sqlite:latest --mcp \
   --fs-policy allowlist --fs-allow /data/app.sqlite
 ```
 
@@ -65,7 +71,7 @@ One component fronts anything — Stripe, GitHub, your internal API,
 the Petstore reference — with one capability grant per upstream:
 
 ```bash
-act call ghcr.io/actpkg/openapi-bridge:latest find_pets_by_status \
+act call actpkg.dev/library/openapi-bridge:latest find_pets_by_status \
   --args '{"status":"sold"}' \
   --session-args '{"spec_url":"https://api.example.com/openapi.json"}' \
   --http-policy allowlist --http-allow host=api.example.com

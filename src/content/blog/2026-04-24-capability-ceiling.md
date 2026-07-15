@@ -5,6 +5,12 @@ pubDate: 2026-04-24
 author: actcore
 ---
 
+> **Update (2026-08):** the per-class policy flags used below — `--fs-policy`,
+> `--fs-allow`, `--http-policy`, `--http-allow` and friends — were replaced by a uniform
+> grant model (`--grant`, `--allow`, `--deny`), and the default mode is now `ask` rather
+> than deny. The capability-ceiling model this post describes is unchanged; only the flag
+> spelling is. See [Policy & sandbox](/docs/host/policy/).
+
 Handing a third-party tool to your AI agent is the same problem as
 handing a third-party binary to `cron`. The tool's author may be a
 good actor or not. The agent may misuse the tool or not. The

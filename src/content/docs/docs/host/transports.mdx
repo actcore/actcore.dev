@@ -1,78 +1,148 @@
 ---
 title: Transports
-description: One component, four consumption paths — MCP, ACT-HTTP, CLI, and browser.
+description: One component, three consumption paths — MCP (stdio or Streamable HTTP), the CLI, and the browser.
 ---
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-A component implements one interface (`act:tools/tool-provider`). The host exposes it over a transport of your choice. All transports share the same semantics — tools, arguments, events — and differ only in the wire encoding and discovery mechanism.
+A component implements one interface (`act:tools/tool-provider`). The host exposes it over a
+transport of your choice. All transports share the same semantics — tools, arguments, events —
+and differ only in the wire encoding and discovery mechanism.
 
-## MCP stdio
+**MCP is ACT's protocol on the wire.** The host speaks it over stdio or over HTTP; the CLI and
+the browser runtime call the same component directly, without a wire at all.
+
+## MCP over stdio
 
 ```bash
 act run <component> --mcp
 ```
 
-Speaks JSON-RPC 2.0 over stdin/stdout, backed by the [`rmcp`](https://docs.rs/rmcp) crate. Tool annotations (`std:read-only`, `std:destructive`, etc.) map to MCP `readOnlyHint`, `destructiveHint`, `idempotentHint`.
+Speaks JSON-RPC 2.0 over stdin/stdout, backed by the [`rmcp`](https://docs.rs/rmcp) crate. Tool
+annotations (`std:read-only`, `std:destructive`, etc.) map to MCP `readOnlyHint`,
+`destructiveHint`, `idempotentHint`.
 
-Use with Claude Desktop, Cursor, Cline, OpenCode, or any MCP client. Example client config:
+Use with Claude Code, Claude Desktop, Cursor, Cline, OpenCode, or any MCP client. Example client
+config:
 
 ```json
 {
   "mcpServers": {
     "sqlite": {
       "command": "npx",
-      "args": ["@actcore/act", "run", "ghcr.io/actpkg/sqlite:latest", "--mcp",
-               "--fs-policy", "allowlist", "--fs-allow", "/tmp/db.sqlite"]
+      "args": ["@actcore/act", "run", "actpkg.dev/library/sqlite", "--mcp",
+               "--grant", "{\"wasi:filesystem\":{\"mode\":\"allowlist\",\"allow\":[{\"path\":\"/tmp/db.sqlite\",\"mode\":\"rw\"}]}}"]
     }
   }
 }
 ```
 
-The MCP adapter is thin: `tools/list` maps to `list-tools`, `tools/call` maps to `call-tool`. See the [MCP spec adapter doc](https://github.com/actcore/act-spec/blob/main/spec/ACT-MCP.md).
+The MCP adapter is thin: `tools/list` maps to `list-tools`, `tools/call` maps to `call-tool`.
+For a component that exports `session-provider`, the host synthesises virtual `open_session` /
+`close_session` tools and forwards `_meta.std:session-id` into the WIT call metadata. See the
+[MCP adapter spec](https://github.com/actcore/act-spec/blob/main/spec/ACT-MCP.md).
 
-## ACT-HTTP
+## MCP over Streamable HTTP
 
 ```bash
-act run <component> --http --listen "[::1]:3000"
+act run <component> --mcp --http -l "[::1]:3000"
 ```
 
-Exposes the component as a REST-ish server. Endpoints:
+The same MCP server, carried over an HTTP listener instead of stdio. It serves the single
+endpoint **`/mcp`**: `POST` a JSON-RPC request with
+`Accept: application/json, text/event-stream`, and the response comes back as an SSE stream with
+an `mcp-session-id` header identifying the connection.
 
-| Endpoint | Purpose |
-|---|---|
-| `GET /info` | Component info (name, version, capabilities, tools). No instantiation. |
-| `GET /tools` | `tool-definition` list (full schemas) |
-| `GET /metadata-schema` | JSON Schema of accepted metadata |
-| `POST /tools/<name>` | Invoke a tool. Body: `{"arguments": {...}, "metadata": {...}}`. SSE stream on success. |
+```bash
+curl -X POST http://[::1]:3000/mcp \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize",
+       "params":{"protocolVersion":"2025-06-18","capabilities":{},
+                 "clientInfo":{"name":"curl","version":"0"}}}'
+```
 
-Content type negotiation: responses are CBOR by default, JSON with `Accept: application/json`. See [ACT-HTTP](https://github.com/actcore/act-spec/blob/main/spec/ACT-HTTP.md) for the wire spec and [OpenAPI 3.2](https://github.com/actcore/act-spec/blob/main/spec/ACT-HTTP-openapi.yaml) definition.
+`--http` requires `--mcp`, and `--listen` requires `--http`. Because a connected MCP client is a
+real prompt channel, this transport can resolve `ask`-mode capability requests through MCP
+elicitation, exactly as stdio does.
+
+:::caution[ACT-HTTP, the REST binding, was removed in 0.12.0]
+Earlier releases had a second HTTP server — a REST-ish binding with `/info`, `/tools`,
+`/tools/{name}` and `/sessions` endpoints — reachable via `act run --http` or a bare
+`act run --listen`. It is gone. Those paths now return `404`, and the flags fail loudly rather
+than quietly serving a different protocol:
+
+```console
+$ act run <component> --http
+Error: ACT-HTTP (the REST binding) was removed in 0.12.0. Use `--mcp` for MCP over stdio,
+or `--mcp --http` to serve MCP over Streamable HTTP at /mcp on --listen.
+
+$ act run <component>
+Error: Specify a transport: --mcp (stdio), or --mcp --http (MCP over HTTP)
+```
+
+If you were consuming the REST endpoints, the replacement is an MCP client against `/mcp`.
+:::
 
 ## CLI direct
 
 ```bash
-act call <component> <tool> --args '{"k":"v"}' --metadata '{"std:trace-id":"abc"}'
+act call <component> <tool> --args '{"k":"v"}' -m std:trace-id=abc
 ```
 
-Instantiates, runs one tool, prints the result, exits. Ideal for scripting and interactive debugging.
+Instantiates, runs one tool, prints the result, exits. Ideal for scripting and interactive
+debugging. Add `--session-args '<json>'` when the component needs a session — the host opens it,
+runs the call, and closes it in one process.
 
-## Browser (jco)
+## Browser
 
-Transpile with [`jco`](https://github.com/bytecodealliance/jco):
+An ACT component runs client-side with no host process at all.
+[`@actcore/web-runtime`](https://www.npmjs.com/package/@actcore/web-runtime) takes the `.wasm`
+bytes and **transpiles them in the tab** using jco's in-browser transpiler — there is no build
+step, no server, and no Node involved in shipping the tool:
 
-```bash
-jco transpile component.wasm -o dist/
+```ts
+import { runComponent } from '@actcore/web-runtime';
+
+const wasm = new Uint8Array(await (await fetch('/time.wasm')).arrayBuffer());
+const { toolProvider } = await runComponent(wasm, { shimBase });
+
+const { tools } = await toolProvider.listTools([]);
+const result = await toolProvider.callTool('get_current_time', new Uint8Array([0xa0]), []);
 ```
 
-Produces JS + core-Wasm modules you can `import` in a browser. Same `tool-provider` interface, same arguments — just running entirely client-side. Useful for offline-first apps and component playgrounds.
+Same `tool-provider` interface, same CBOR arguments, running entirely in the page. The runtime
+enforces ACT's capability policy in the browser too — the same declared-ceiling model as the
+native host, including `ask`-mode consent prompts and an audit trail — and ships its own
+`wasi:http` and `wasi:sockets` shims. It requires [JSPI](https://github.com/WebAssembly/js-promise-integration).
+
+### WebMCP
+
+A loaded component's tools can be registered on the browser's native
+[WebMCP](https://webmachinelearning.github.io/webmcp/) surface (`document.modelContext`), so an
+agent running in the user's browser can discover and call them directly:
+
+```ts
+import { exposeToWebmcp, isWebmcpAvailable } from '@actcore/web-runtime';
+
+if (isWebmcpAvailable()) {
+  await exposeToWebmcp(toolProvider, tools);
+}
+```
+
+This turns any page into a source of sandboxed, capability-bounded tools for a browser agent —
+no server, no install. WebMCP is pre-standardization, so the bridge is feature-gated and opt-in.
+
+See it live on the [Python playground](/python).
 
 ## Picking a transport
 
 | Use case | Transport |
 |---|---|
-| Agent (Claude Desktop, Cursor, …) | `--mcp` |
-| Backend service, SaaS app | `--http` |
+| Agent (Claude Code, Claude Desktop, Cursor, …) | `--mcp` |
+| Remote or containerised agent, shared server | `--mcp --http` |
 | Scripts, CI, debugging | `act call` |
-| Playground, offline tools | jco in the browser |
+| Playground, offline tools, client-side apps | browser runtime |
+| Agent running inside the user's browser | browser runtime + WebMCP |
 
-One component, one source of truth, four deployments.
+One component, one source of truth, every deployment.

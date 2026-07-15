@@ -6,12 +6,16 @@ description: Build an ACT component in Rust with the act-sdk macros.
 ## Scaffold
 
 ```bash
-copier copy gh:actcore/act-template-rust my-component
+act-build init rust my-component
 cd my-component
 just init
 ```
 
-The template sets up `Cargo.toml` with `act-sdk = "0.7"`, a `wit/` directory tracking [`act:tools@0.1.0`](https://github.com/actcore/act-spec/blob/main/wit/act-tools/act-tools.wit) (and [`act:sessions@0.1.0`](https://github.com/actcore/act-spec/blob/main/wit/act-sessions/act-sessions.wit) for stateful components) over [`act:core@0.4.0`](https://github.com/actcore/act-spec/blob/main/wit/act-core/act-core.wit), a `rust-toolchain.toml` pinning nightly + `wasm32-wasip2`, and a `justfile` with `build` / `test` / `publish` recipes.
+`act-build init` carries the templates inside the binary — there is no `copier`, `uvx`, or Python
+toolchain involved. Pass `--http` / `--fs` to have it declare those capabilities in `act.toml`
+for you.
+
+The template sets up `Cargo.toml` with a current [`act-sdk`](https://crates.io/crates/act-sdk), a `wit/` directory tracking [`act:tools`](https://github.com/actcore/act-spec/blob/main/wit/act-tools/act-tools.wit) (and [`act:sessions`](https://github.com/actcore/act-spec/blob/main/wit/act-sessions/act-sessions.wit) for stateful components) over [`act:core`](https://github.com/actcore/act-spec/blob/main/wit/act-core/act-core.wit), a `rust-toolchain.toml` pinning nightly + `wasm32-wasip2`, and a `justfile` with `build` / `test` / `publish` recipes.
 
 ## Write a tool
 
@@ -20,16 +24,14 @@ The template sets up `Cargo.toml` with `act-sdk = "0.7"`, a `wit/` directory tra
 ```rust
 use act_sdk::prelude::*;
 
-act_sdk::embed_skill!("skill/");
-
 #[act_component]
 mod component {
     use super::*;
 
-    /// Reverse a string.
     #[act_tool(description = "Reverse a string", read_only)]
     fn reverse(
-        #[doc = "Text to reverse"] text: String,
+        /// Text to reverse
+        text: String,
     ) -> ActResult<String> {
         Ok(text.chars().rev().collect())
     }
@@ -59,7 +61,7 @@ Should print your component name, version, and the `reverse` tool with its auto-
 ## Run
 
 ```bash
-just test                    # e2e hurl tests against the built component
+just test                    # e2e suite: pytest driving the component over MCP
 act call <wasm> reverse --args '{"text":"hello"}'
 ```
 
@@ -72,10 +74,14 @@ act call <wasm> reverse --args '{"text":"hello"}'
 | `ActError` / `ActResult` | Return errors with a `std:*` kind and localized message |
 | `Json<T>` | Opt into JSON encoding (default is CBOR, per [ACT-SPEC](https://github.com/actcore/act-spec/blob/main/spec/ACT-SPEC.md)) |
 | `Content { mime, data }` | Return raw bytes with an explicit MIME type |
-| `embed_skill!("skill/")` | Compile-time embed of `skill/SKILL.md` + friends |
+| `#[session_open]` / `#[session_close]` | Mark the session lifecycle hooks of a stateful component |
+| `ActContext` / `SessionRegistry` | Per-call context and per-session state |
+
+Agent Skills need no macro: `act-build pack` embeds a `skill/` directory automatically. See
+[Agent Skills](/docs/build/skills/).
 
 ## Next
 
 - [Declare capabilities](/docs/build/manifest/) — `wasi:filesystem`, `wasi:http`
 - [Agent Skills](/docs/build/skills/) — `SKILL.md` embedded in the component
-- [Testing](/docs/build/testing/) — `just test` pattern with `hurl`
+- [Testing](/docs/build/testing/) — the `just test` pattern: pytest + a real MCP client

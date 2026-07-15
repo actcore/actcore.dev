@@ -14,18 +14,54 @@ This page maps each control area to the concrete capability inside ACT that deli
 | | |
 |---|---|
 | Status | Shipped |
-| ACT capability | GitHub Actions attestation; source repository pinned in every artifact |
+| ACT capability | Keyless [cosign](https://docs.sigstore.dev/) signing via GitHub OIDC; source repository pinned in every artifact |
 
-Every component published under `ghcr.io/actpkg` is built by [`actions/attest`](https://github.com/actions/attest) inside the upstream component's CI. The attestation binds the OCI manifest digest to the workflow run, the commit, and the repository — verifiable with `gh attestation verify`. The component's source repo URL is also embedded in the `act:component` custom section, which the host reads without execution.
+Every component published under `actpkg.dev/library` is signed in its upstream CI with
+**keyless cosign over GitHub's OIDC token** — no long-lived signing key exists. The signature
+binds the artifact's OCI manifest digest to the workflow identity that produced it (a workflow
+in `github.com/actpkg/<component>`), and is attached to the artifact in the registry. Verify
+before you deploy:
+
+```bash
+cosign verify actpkg.dev/library/sqlite@sha256:<digest> \
+  --certificate-identity-regexp '^https://github\.com/actpkg/' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
+
+The component's source repository URL is also recorded twice — as the OCI
+`org.opencontainers.image.source` annotation, and inside the `act:component` custom section,
+which the host reads without executing the component.
+
+:::caution[Verification is an operator step, not a runtime one]
+The `act` host does **not** verify signatures when it pulls or runs a component. It resolves
+and caches the artifact, and its local store retains the signature referrers, but no signature
+check gates execution. If your threat model requires one, run `cosign verify` in your own
+pipeline and deploy by digest rather than by tag.
+:::
 
 ### Code integrity auditing
 
 | | |
 |---|---|
-| Status | Partial — reproducible-build infrastructure shipped; LLM-audit + dependency scanning planned |
-| ACT capability | Deterministic `wasm32-wasip2` build outputs; signed publish via `act-build push` |
+| Status | Partial — pinned toolchains and inspectable artifacts shipped; verified reproducibility, LLM-audit and dependency scanning planned |
+| ACT capability | Pinned build toolchains; CNCF Wasm OCI Artifact manifests via `act-build push` |
 
-Component builds produce byte-identical `.wasm` artifacts across runs given the same source and toolchain, which is what makes attestation meaningful. The `act-build push` subcommand emits a [CNCF Wasm OCI Artifact](https://tag-runtime.cncf.io/wgs/wasm/deliverables/wasm-oci-artifact/) conformant manifest with a config blob carrying `architecture`, `os`, `layerDigests`, and component-level exports/imports — so any registry-side tooling that understands the spec can audit the artifact without pulling the layer. LLM-driven code audit, Socket/Snyk dependency scanning, and SBOM publication are on the roadmap.
+`act-build push` emits a [CNCF Wasm OCI Artifact](https://tag-runtime.cncf.io/wgs/wasm/deliverables/wasm-oci-artifact/)
+conformant manifest with a config blob carrying `architecture`, `os`, `layerDigests`, and the
+component's own exports and imports — so registry-side tooling can audit what an artifact claims
+to do without pulling the layer. Component builds pin their toolchains (`rust-toolchain.toml`,
+and a pinned container image for the harder language targets).
+
+:::caution[Reproducibility is not yet verified]
+Pinned toolchains make rebuilds comparable, but we do **not** currently assert byte-identical
+output: nothing in CI rebuilds a component and diffs the digest, and the publish path uses
+`--skip-if-exists` precisely because layer digests can legitimately differ between runs. Treat
+build reproducibility as an open goal, not a property you can rely on today. What *is* verifiable
+now is the signature binding an artifact to the workflow that produced it — see
+[Provenance verification](#provenance-verification) above.
+:::
+
+LLM-driven code audit, dependency vulnerability scanning, and SBOM publication are on the roadmap.
 
 ## Deployment
 
@@ -45,7 +81,7 @@ Components run inside a [`wasmtime`](https://wasmtime.dev) virtual machine that 
 | Status | Shipped |
 | ACT capability | `wasi:http` allow/deny lists; DNS-layer CIDR deny; per-redirect re-check |
 
-Every outbound HTTP request is gated by host policy along five axes: host, scheme, method, port, and DNS-resolved IP. CIDR-based deny lists block private ranges and metadata services (`169.254.169.254/32`) before they leave the sandbox. Each hop of a redirect chain is re-checked against the same policy — a 302 to a denied host fails mid-chain instead of silently succeeding. See [Network policy](/docs/host/policy/#network).
+Every outbound HTTP request is gated by host policy along five axes: host, scheme, method, port, and DNS-resolved IP. CIDR-based deny lists block private ranges and metadata services (`169.254.169.254/32`) before they leave the sandbox. Each hop of a redirect chain is re-checked against the same policy — a 302 to a denied host fails mid-chain instead of silently succeeding. See [`wasi:http` policy](/docs/host/policy/#wasihttp).
 
 ## Operational
 
@@ -54,18 +90,54 @@ Every outbound HTTP request is gated by host policy along five axes: host, schem
 | | |
 |---|---|
 | Status | Shipped |
-| ACT capability | `act:sessions` open-session args with host-side schema validation |
+| ACT capability | Credentials travel in session args, never in per-call metadata; a host credential store the agent cannot read |
 
-Credentials never live in per-call metadata where every agent invocation can see them. Stateful components declare an open-session argument schema via [`get-open-session-args-schema`](https://github.com/actcore/act-spec/blob/main/spec/ACT-SESSIONS.md); the host validates the args against the schema and injects credentials into the wasm instance once at session open. The agent only ever sees an opaque session-id afterward. See [the auth design rationale](https://github.com/actcore/act-spec/blob/main/spec/ACT-AUTH.md).
+Credentials never live in per-call metadata, where every agent invocation would see them. A
+stateful component publishes the argument schema it expects via
+[`get-open-session-args-schema`](https://github.com/actcore/act-spec/blob/main/spec/ACT-SESSIONS.md),
+receives its credentials **once** at session open, and hands back an opaque session id — that id
+is all the agent ever handles afterwards. Session args are also the one thing the audit trail
+never records, even under `--audit-args`.
+
+Operators keep values in a host-side credential store rather than in config or environment
+variables: `act secret set` writes one, `act login` prompts for whatever a component declares in
+its `[[std.credentials]]` entries, and neither command will print a stored value back — there is
+deliberately no `act secret get`. See [the auth design rationale](https://github.com/actcore/act-spec/blob/main/spec/ACT-AUTH.md).
+
+:::note[Schema validation happens in the guest]
+The schema is a contract the component publishes, not a gate the host enforces: `act` ships no
+JSON Schema validator, and argument validation is done by the component (the SDKs do it). Do not
+model the host as sanitising arguments on a component's behalf.
+:::
 
 ### Observability & logging
 
 | | |
 |---|---|
-| Status | Partial — tracing shipped; structured audit logs planned |
-| ACT capability | `tracing` output via `--log-level`; host-side denial events |
+| Status | Shipped |
+| ACT capability | Always-on audit trail: resolved policy, every capability decision, one record per tool call |
 
-The host emits structured `tracing` events for component load, tool invocation, and policy denials. A structured audit-log emission format (one line per tool call, redaction-aware) is on the roadmap — see [project issue tracker](https://github.com/actcore/act-cli/issues).
+Every run emits an audit trail on stderr. It opens with the artifact digest and the policy each
+capability actually resolved to, records each capability decision as it is made — with the reason
+— and closes each tool call with a rollup:
+
+```console
+audit: actpkg.dev/library/sqlite sha256:cb7715 │ act:credentials=deny wasi:filesystem=allowlist wasi:http=deny wasi:sockets=deny
+audit: ✓ allow  wasi:filesystem  write /data/app.sqlite  mode:allowlist under /data/**
+audit: ✗ deny   wasi:filesystem  read  /dev/urandom      outside ceiling  mode:allowlist
+audit: ● query  ok 0ms  args:1e91dd  req:005ea7  session:sqlite_0
+```
+
+Two properties matter for an evidentiary log. It is **redaction-aware by default**: tool
+arguments are recorded as a digest, not a value, and session args — which is where ACT puts
+credentials — are never recorded at all. `--audit-args` swaps the digest for full values and warns
+that it can expose secrets. And it is **not a logging level**: the trail is filtered independently
+of `RUST_LOG`, so raising or silencing application logs cannot silence it. Only `--no-audit`, or
+`[audit] enabled = false` in the config file, turns it off; `[audit] detail` selects `rollup`
+(default) or `full`.
+
+Guest-emitted telemetry is kept on a separate channel and is never merged into the audit trail —
+a component cannot write to its own audit record.
 
 ### Backup & versioning
 
@@ -74,7 +146,7 @@ The host emits structured `tracing` events for component load, tool invocation, 
 | Status | Shipped (delegated to OCI registry) |
 | ACT capability | Immutable OCI tags; content-addressable retrieval by digest |
 
-Components are referenced by `ghcr.io/actpkg/<name>:<version>` and resolvable by digest (`@sha256:...`). The host caches pulled components by reference at `~/.cache/act/components/`, so the running artifact is always traceable to a registry-tagged version.
+Components are referenced by `actpkg.dev/library/<name>:<version>` and resolvable by digest (`@sha256:...`). The host caches pulled components by reference at `~/.cache/act/components/`, so the running artifact is always traceable to a registry-tagged version.
 
 ## Advanced
 
@@ -86,6 +158,37 @@ Components are referenced by `ghcr.io/actpkg/<name>:<version>` and resolvable by
 | ACT capability | Capability ceiling (build-time declaration ∩ runtime grant) |
 
 This is ACT's signature control. Every component declares the capabilities it requires in its `act.toml` (`[std.capabilities."wasi:filesystem"]`, `[std.capabilities."wasi:http"]`, etc.); the operator grants what they're willing to give at run time. The effective policy is the intersection: a permissive operator cannot escalate past the component's stated intent, and a lazy component cannot silently reach past the operator's grants. See [Policy & sandbox](/docs/host/policy/).
+
+### Runtime consent
+
+| | |
+|---|---|
+| Status | Shipped for physical capabilities; semantic-action consent specified, not yet implemented |
+| ACT capability | Ask-by-default prompting with a per-session decision cache and fail-safe deny |
+
+A capability ceiling answers *what may this artifact reach at all*. It does not answer *should
+this particular action happen now* — so the default policy mode is `ask`: the first time a
+component touches a granted capability, the operator is asked, and the answer is cached for the
+session. The prompt goes to the TTY for an interactive `act call`, or to the connected MCP client
+via MCP elicitation when running under `act run --mcp`. **Where there is no channel to ask on, the
+answer is deny** — a headless run cannot be silently escalated by leaving the mode at `ask`.
+
+This defends against a different adversary than the ceiling does. The ceiling stops a **rogue
+component** — an artifact that does something other than what it claims — because the host
+intercepts the boundary and the component simply cannot reach what it wasn't granted. Consent
+addresses a **rogue agent**: a mistaken or prompt-injected model driving a component that is
+behaving exactly as documented.
+
+That second adversary has a gap the physical boundary cannot close. `DROP DATABASE analytics`
+travels over a socket the operator already granted; a prompt injection reaches a browser over an
+already-granted HTTP session. The host sees permitted bytes on a permitted channel.
+[`act:consent@0.1.0`](https://github.com/actcore/act-spec/blob/main/spec/ACT-CONSENT.md) closes it
+by inverting the initiative: the component names the *class* of action it is about to take
+(`db:drop-database`), and the host applies that class's policy — the same grants, modes, and audit
+trail as any physical class. It is normatively specified and, like `act:credentials`, is a host
+import a component opts into. **The host does not implement it yet**; today a component that wants
+this enforces its declared semantic classes itself, and operators gate them with
+`--deny db:drop-database`.
 
 ### Payments / wallet security
 
@@ -103,17 +206,18 @@ The [`openwallet`](https://github.com/actpkg/openwallet) component implements OW
 | Status | Shipped |
 | ACT capability | `act:sessions/session-provider` — `open-session` / `close-session` |
 
-Stateful components opt into [`act:sessions@0.1.0`](https://github.com/actcore/act-spec/blob/main/spec/ACT-SESSIONS.md), a three-function WIT interface that hands explicit lifecycle control to the host. The host keeps the wasm instance alive while sessions are open and closes whatever's still open before tearing the instance down. Auth, parsed-spec caching, and live-connection state all live behind this boundary.
+Stateful components opt into [`act:sessions@0.2.0`](https://github.com/actcore/act-spec/blob/main/spec/ACT-SESSIONS.md), a three-function WIT interface that hands explicit lifecycle control to the host. The host keeps the wasm instance alive while sessions are open and closes whatever's still open before tearing the instance down. Auth, parsed-spec caching, and live-connection state all live behind this boundary.
 
 ## Roadmap
 
 The framework areas marked **partial** above translate to concrete in-flight work:
 
-- **Structured audit-log emission** — line-per-tool-call output, redaction-aware, machine-parsable.
-- **Cosign-based supply chain signing on top of GH attestation** — for non-GitHub registries and detached signatures.
+- **Host-side signature verification** — `act` pulls and runs without checking the cosign signature today; gating execution on verification is in-flight.
+- **`act:consent` in the host** — the semantic-action interface is specified and unimplemented; until it lands, semantic classes rest on the component enforcing its own declarations.
+- **Verified reproducible builds** — rebuild-and-diff in CI, so byte-identical output becomes a checked property rather than an aspiration.
 - **LLM-driven code audit + dependency vulnerability scanning** integrated into the `actpkg.dev` curation pipeline.
 - **SBOM publication** alongside every component artifact.
-- **Capability-attenuation API** — host operators can issue a strict sub-policy of the granted ceiling to a specific agent session.
+- **Capability attenuation** — issuing a strict sub-policy of the granted ceiling to a specific agent session.
 
 ## Engage
 

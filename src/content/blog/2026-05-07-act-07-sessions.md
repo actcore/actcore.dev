@@ -10,6 +10,19 @@ tags:
   - openapi
 ---
 
+> **Update (2026-08):** ACT-HTTP — the REST binding with `/info`, `/tools` and
+> `/sessions` — was removed in `act` 0.12.0. MCP is now ACT's transport on the wire:
+> use `--mcp` for stdio or `--mcp --http` for MCP over Streamable HTTP at `/mcp`.
+> The commands below that use `act run --http` no longer work as written; everything
+> about sessions and components themselves still holds. See
+> [Transports](/docs/host/transports/).
+
+> **Update (2026-08):** the per-class policy flags used below — `--fs-policy`,
+> `--fs-allow`, `--http-policy`, `--http-allow` and friends — were replaced by a uniform
+> grant model (`--grant`, `--allow`, `--deny`), and the default mode is now `ask` rather
+> than deny. The capability-ceiling model this post describes is unchanged; only the flag
+> spelling is. See [Policy & sandbox](/docs/host/policy/).
+
 The previous posts focused on what ACT *is* — sandboxed components, one
 binary per transport, capability ceilings. This one is about a thing
 that was missing: **state**.
@@ -81,7 +94,7 @@ never see the upstream's id, so swapping upstream-session-ids on
 expiry is invisible from the agent's side.
 
 ```bash
-act run ghcr.io/actpkg/mcp-bridge:0.2.0 --mcp
+act run actpkg.dev/library/mcp-bridge:latest --mcp
 # then, agent: open_session({"url": "https://upstream.example/mcp", "auth_token": "sk-..."})
 #         →  {"id": "mcp_0", "metadata": {}}
 # then, agent: tools/list with _meta.std:session-id = mcp_0
@@ -173,10 +186,10 @@ proxy through `act-http-bridge` and call it through the proxy.
 
 ```bash
 # Terminal 1 — upstream ACT-HTTP server.
-act run ghcr.io/actpkg/time:0.2.0 --http -l '[::1]:3000'
+act run actpkg.dev/library/time:latest --http -l '[::1]:3000'
 
 # Terminal 2 — one-shot call through the bridge.
-act call ghcr.io/actpkg/act-http-bridge:0.2.0 get_current_time \
+act call actpkg.dev/library/act-http-bridge:latest get_current_time \
   --args '{}' \
   --session-args '{"url":"http://[::1]:3000"}' \
   --http-policy open
@@ -274,7 +287,7 @@ known gap; an SDK-side affordance for dynamic catalogs is on the list.
   boilerplate components currently write to read the session-id.
 
 If you've got an OpenAPI spec, a remote MCP server, or an internal
-ACT-HTTP fleet, the bridges are running on `ghcr.io/actpkg` ready for
+ACT-HTTP fleet, the bridges are running on `actpkg.dev/library` ready for
 `act run --mcp`. If you want to write a stateful component yourself,
 the [sessions-counter
 example](https://github.com/actcore/act-sdk-rs/tree/main/examples/sessions-counter)

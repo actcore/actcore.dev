@@ -1,63 +1,102 @@
 ---
 title: Run your first component
-description: Pull a published component from an OCI registry and call it as MCP, HTTP, or CLI in three commands.
+description: Pull a published component from an OCI registry and call it from the CLI or an MCP client in three commands.
 ---
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-Every `act` subcommand accepts the same three forms of reference: a local path, an HTTP(S) URL, or an OCI registry ref. We'll use the published SQLite component at `ghcr.io/actpkg/sqlite:latest`.
+Every `act` subcommand accepts the same three forms of reference: a local path, an HTTP(S) URL,
+or an OCI registry ref. We'll use the published SQLite component at `actpkg.dev/library/sqlite`.
 
 ## Inspect
 
 ```bash
-act info ghcr.io/actpkg/sqlite:latest --tools
+act info actpkg.dev/library/sqlite --tools
 ```
 
-Prints the component's metadata (`name`, `version`, `description`), its declared capabilities, and every tool it exposes. No instantiation — metadata is read from the `act:component` WASM custom section.
+Prints the component's metadata (`name`, `version`, `description`), its declared capabilities,
+and every tool it exposes.
 
 ## Call a tool directly
 
 ```bash
-act call ghcr.io/actpkg/sqlite:latest query \
+mkdir -p /tmp/actdemo
+
+act call actpkg.dev/library/sqlite query \
   --args '{"sql": "SELECT sqlite_version()"}' \
-  --fs-policy allowlist --fs-allow /tmp/db.sqlite \
-  --metadata '{"database_path": "/tmp/db.sqlite"}'
+  --session-args '{"database_path": "/tmp/actdemo/app.sqlite"}' \
+  --grant '{"wasi:filesystem":{"mode":"allowlist","allow":[
+      {"path":"/tmp/actdemo/**","mode":"rw"},
+      {"path":"/dev/urandom","mode":"ro"}]}}'
+```
+
+```json
+[
+  {
+    "sqlite_version()": "3.51.3"
+  }
+]
 ```
 
 `act call` instantiates the component, runs one tool, prints the result, and exits.
 
-## Serve it
+Two things in that command are worth unpacking:
+
+- **`--session-args`** — `sqlite` is a stateful component: it holds an open database connection,
+  so it exports `session-provider` and takes its connection parameters at session open rather
+  than per call. On `act call`, this flag opens a session-of-1, runs the call, and closes it.
+  Ask any component what it accepts with `act session open-args-schema <component>`.
+- **`--grant`** — the component declares a `wasi:filesystem` capability, and nothing reaches the
+  filesystem until you grant it. Note the grant covers the whole directory and `/dev/urandom`,
+  not just the database file: SQLite also writes a `.lock` sidecar and reads random bytes. Grant
+  too little and the audit trail tells you exactly what was refused.
+
+## Serve it to an agent
 
 <Tabs syncKey="transport">
-<TabItem label="As MCP">
+<TabItem label="MCP over stdio">
 ```bash
-act run ghcr.io/actpkg/sqlite:latest --mcp \
-  --fs-policy allowlist --fs-allow /tmp/db.sqlite
+act run actpkg.dev/library/sqlite --mcp \
+  --session-args '{"database_path": "/tmp/actdemo/app.sqlite"}' \
+  --grant '{"wasi:filesystem":{"mode":"allowlist","allow":[
+      {"path":"/tmp/actdemo/**","mode":"rw"},
+      {"path":"/dev/urandom","mode":"ro"}]}}'
 ```
-Exposes the component over MCP stdio. Plug into Claude Desktop, Cursor, or any MCP client.
+Exposes the component over MCP stdio. Plug into Claude Code, Claude Desktop, Cursor, or any MCP
+client. With `--session-args` the host pre-opens one session and hides the session machinery
+from the client entirely.
 </TabItem>
-<TabItem label="As HTTP">
+<TabItem label="MCP over HTTP">
 ```bash
-act run ghcr.io/actpkg/sqlite:latest --http --listen "[::1]:3000" \
-  --fs-policy allowlist --fs-allow /tmp/db.sqlite
-curl http://[::1]:3000/info
-curl -X POST http://[::1]:3000/tools/query \
-  -d '{"arguments": {"sql": "SELECT 1"}, "metadata": {"database_path": "/tmp/db.sqlite"}}'
+act run actpkg.dev/library/sqlite --mcp --http -l "[::1]:3000" \
+  --session-args '{"database_path": "/tmp/actdemo/app.sqlite"}' \
+  --grant '{"wasi:filesystem":{"mode":"allowlist","allow":[
+      {"path":"/tmp/actdemo/**","mode":"rw"},
+      {"path":"/dev/urandom","mode":"ro"}]}}'
 ```
-Exposes [ACT-HTTP](https://github.com/actcore/act-spec/blob/main/spec/ACT-HTTP.md) endpoints with SSE streaming.
+The same MCP server on an HTTP listener, at `/mcp`. Use it for a remote or containerised agent.
+See [Transports](/docs/host/transports/).
 </TabItem>
 </Tabs>
 
 ## Where did the `.wasm` go?
 
-`act` cached it to `~/.cache/act/components/`. Subsequent runs skip the network.
+`act` cached it to `~/.cache/act/components/`. Subsequent runs skip the network. `act store list`
+shows what's cached, `act store gc` prunes it.
 
-## Why did the command need `--fs-policy`?
+## Why did the command need a grant?
 
-The SQLite component declares a `wasi:filesystem` capability. At runtime you must grant that capability (otherwise the component can open no files at all). The declaration is a **ceiling** — you can't grant more than the component asked for. See [Policy & sandbox](/docs/host/policy/).
+The SQLite component declares a `wasi:filesystem` capability. At runtime you must grant it —
+otherwise the component can open no files at all. The declaration is a **ceiling**: you can't
+grant more than the component asked for, and the component can't reach past what you granted.
+
+The default policy mode is `ask`, so an interactive run prompts you on first access instead of
+requiring the flag up front. A headless run with no prompt channel degrades to deny — which is
+why scripted invocations like the ones above pass `--grant` explicitly. See
+[Policy & sandbox](/docs/host/policy/).
 
 ## Next
 
 - [Build a component](/docs/build/rust/) in Rust
-- [Configure host policy](/docs/host/policy/) — filesystem & network allow/deny
-- [Profiles](/docs/host/config/) — save the `--fs-allow` arguments for this SQLite component in `~/.config/act/config.toml`
+- [Configure host policy](/docs/host/policy/) — filesystem, network, and socket grants
+- [Profiles](/docs/host/config/) — save these grants for SQLite in `~/.config/act/config.toml`

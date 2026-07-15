@@ -1,0 +1,105 @@
+---
+title: Language support
+description: Twelve languages produce conformant ACT components today — two with a first-class SDK, the rest through the Component Model directly or the sync compatibility tier.
+---
+
+ACT's contract is a WIT interface, not a framework, so any toolchain that can emit a WebAssembly
+component can produce one. In practice "can it?" is a question about the maturity of each
+language's bindings generator, not about ACT. This page records what has actually been built and
+run, not what should theoretically work.
+
+**Every entry below was verified the same way**: build the component, then load it with `act`. The
+host's bindings do a structural type check at load time, so a component that doesn't export
+exactly `act:tools/tool-provider@0.2.0` — async functions, `tool-result` with both arms — is
+rejected. Loading is a free conformance test, and nothing reaches this table without passing it
+plus an end-to-end tool call.
+
+## The tiers
+
+### First-class SDKs
+
+| Language | How |
+|---|---|
+| **Rust** | [`act-sdk`](https://crates.io/crates/act-sdk) — `#[act_component]` / `#[act_tool]`. See the [Rust quick start](/docs/build/rust/) |
+| **Python** | [`act-sdk`](https://pypi.org/project/act-sdk/) — `@component` / `@tool` via `componentize-py`. See the [Python quick start](/docs/build/python/) |
+
+These are the supported paths: macros or decorators, schema derived from your signatures, one
+`just build` to a packed artifact.
+
+### Direct — the generator handles the canonical async interface
+
+| Language | Toolchain | Size |
+|---|---|---|
+| **C** | wasi-sdk clang + `wit-bindgen c` | ~358 KB |
+| **C++** | wasi-sdk clang++ + `wit-bindgen cpp` | ~165 KB |
+| **Zig** | Zig 0.16 over the C glue, `zbor` for CBOR | ~17 KB |
+
+No shim, no composition step — the toolchain emits a component exporting the async interface as
+published. Zig is the smallest artifact of any language here by an order of magnitude.
+
+### Via the sync compatibility tier
+
+| Language | Toolchain | Size |
+|---|---|---|
+| **Go** | TinyGo + `wit-bindgen-go` | ~1.6 MB |
+| **C#** | componentize-dotnet (.NET 10 + NativeAOT-LLVM) | ~3.7 MB |
+| **Java** | TeaVM + `wit-bindgen-teavm-java` | ~288 KB |
+| **D** | LDC 1.43 + `wit-bindgen d`, `cbor-d` from dub | ~1.2 MB |
+| **Scala** | scala-wasm + `wit-bindgen-scala`, `borer` for CBOR | ~561 KB |
+
+Several generators can't yet emit glue for `async` exports or `stream<>`. Rather than fork the
+WIT — which would embed an interface that isn't the spec — these guests export
+**`act:tools-sync/tool-provider-sync@0.1.0`**, a sync mirror that reuses `act:tools/types@0.2.0`
+verbatim. A prebuilt shim component lifts it to the async interface with one `wac plug`:
+
+```bash
+wkg oci pull ghcr.io/actcore/act/shim-tools-sync:0.1.0 -o tool_shim.wasm
+wac plug tool_shim.wasm --plug inner.wasm -o component.wasm
+```
+
+The shim is the socket and your component is the plug: composing them internalizes
+`act:tools-sync`, and the result exports the canonical async `act:tools/tool-provider@0.2.0`.
+
+The resulting artifact is indistinguishable from a direct one at the host boundary. See
+[ACT-SYNC](https://github.com/actcore/act-spec/blob/main/spec/ACT-SYNC.md).
+
+### Embedded interpreters
+
+| Language | Toolchain | Size |
+|---|---|---|
+| **Lua** | Lua 5.5 via `mlua` in a thin Rust harness | ~516 KB |
+| **PHP** | PHP 8.5 embed SAPI in a thin Rust harness | ~8.0 MB |
+
+A scripting language has no compile step for a generator to hook into, so it reaches the Component
+Model by being *embedded*: a small Rust harness owns the WIT ABI and CBOR and knows nothing about
+your tools, while all the logic lives in a `.lua` or `.php` file. This is the same shape as the
+[`python-env`](https://actpkg.dev) component, and it means adding a tool is editing a script, not
+rebuilding bindings.
+
+### WasmGC guests
+
+**Kotlin** (~331 KB) and **Scala** (~561 KB) compile to WasmGC. Both work, and both require
+`act` 0.10.1 or newer, which is when the host enabled the GC proposal. Kotlin has no
+`wit-bindgen` backend at all and targets WASI 0.1, so it owns its tool logic and CBOR behind a
+minimal internal ABI with a Rust layer handling the canonical interface;
+[KT-64569](https://youtrack.jetbrains.com/issue/KT-64569) would remove that layer.
+
+## Not there yet
+
+| Language | Blocker |
+|---|---|
+| **MoonBit** | The generated glue writes UTF-16 code-unit counts into the canonical ABI's *byte*-length field, so every WIT `string` is mangled — a tool's own name doesn't survive `list-tools`. Builds and loads; not usable. No workaround. |
+| **JavaScript** | `componentize-js` cannot yet emit a `stream<>`-bearing export, which `tool-result` requires. Tracked [upstream](https://github.com/bytecodealliance/ComponentizeJS/issues/335). JS *consumes* ACT components fine in the browser — see [Transports](/docs/host/transports/#browser). |
+| **Mojo** | Its 1.0 LLVM build ships no wasm target at all; blocked at code generation, not at bindings. |
+
+## Why this matters for the security model
+
+The interesting property isn't the count. It's that the capability ceiling, the grant model, and
+the audit trail are enforced by the **host**, at the WASI boundary — so they are identical whether
+the component came from Rust, from a TeaVM-compiled Java class, or from a PHP interpreter with an
+8 MB footprint. A component author cannot weaken them by choosing a language, and a reviewer
+doesn't need to read the guest's language to know what it can reach.
+
+Scaffolds for every language above live in
+[`components-experimental`](https://github.com/actcore/components-experimental), each with a
+README recording the toolchain pins and the specific joints that were load-bearing.

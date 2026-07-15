@@ -48,22 +48,16 @@ Frontmatter fields:
 
 ## Build-time embedding
 
-### Rust
+Nothing in your source code refers to the skill. `act-build pack` looks for a `skill/` directory
+next to the package manifest, tars it, and writes it into the `act:skill` custom section — the
+same way for every language. If the directory is absent, the section is simply omitted.
 
-```rust
-act_sdk::embed_skill!("skill/");
-```
-
-Compile-time macro. Reads `skill/` at `build.rs` time, tars it, and emits the `act:skill` custom section via `#[link_section]`.
-
-### Python
-
-`act-build pack` picks up `skill/` automatically — no code change needed.
+Run with `RUST_LOG=act_build=info` to see which sections were written.
 
 ## Extract
 
 ```bash
-act skill ghcr.io/actpkg/sqlite:latest -o .agents/skills/sqlite/
+act skill actpkg.dev/library/sqlite:latest -o .agents/skills/sqlite/
 ```
 
 Writes the tar contents to the given directory. Agents can then use a skill-add workflow to pick up the documentation without ever running the component.

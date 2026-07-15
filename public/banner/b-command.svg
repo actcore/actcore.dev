@@ -13,10 +13,9 @@
   <rect width="1500" height="500" fill="url(#glow)"/>
 
   <g font-family="'DM Mono','JetBrains Mono','IBM Plex Mono','Consolas',monospace" font-weight="500" letter-spacing="-0.015em">
-    <text x="290" y="220" font-size="48" fill="rgba(255,255,255,0.45)">$</text>
-    <text x="345" y="220" font-size="48" fill="#ffffff">act run </text>
-    <text x="555" y="220" font-size="48" fill="#f59e0b">ghcr.io/actpkg/sqlite</text>
-    <text x="1163" y="220" font-size="48" fill="rgba(255,255,255,0.45)">--mcp</text>
+    <!-- One flowing text run: tspans without their own `x` advance naturally, so
+         changing the component ref can no longer collide with the trailing flag. -->
+    <text x="290" y="220" font-size="48"><tspan fill="rgba(255,255,255,0.45)">$ </tspan><tspan fill="#ffffff">act run </tspan><tspan fill="#f59e0b">actpkg.dev/library/sqlite</tspan><tspan fill="rgba(255,255,255,0.45)"> --mcp</tspan></text>
   </g>
 
   <text x="290" y="295" font-family="'Instrument Sans','Inter','Helvetica Neue',Arial,sans-serif"

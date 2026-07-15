@@ -7,11 +7,16 @@ import { Tabs, TabItem } from '@astrojs/starlight/components';
 
 `act-build pack` writes the `act:component` WASM custom section (CBOR-encoded). Its contents are **merged** from several sources:
 
-1. Language manifest — `Cargo.toml` / `pyproject.toml` / `package.json`
-2. SDK-emitted fields — produced by `#[act_component]` / `@component` at build time
-3. `act.toml` — sidecar patch, applied last
+1. **Base** — `name`, `version`, `description` from the language manifest (`Cargo.toml`,
+   `pyproject.toml`, or `package.json`)
+2. **Inline patch** — the ACT table inside that same manifest: `[package.metadata.act]` (Rust),
+   `[tool.act]` (Python), or `"act"` (JS/TS)
+3. **`act.toml`** — sidecar patch, applied last and therefore highest priority
+4. `act-build pack --set <key>=<value>` — a final per-invocation override
 
-Later sources override earlier ones (RFC 7396 merge-patch).
+Later sources override earlier ones (RFC 7396 merge-patch). Note that the SDK macros contribute
+*tool* definitions at compile time, not component metadata: `pack` resolves the manifest from
+these files and writes the `act:component` section from them.
 
 ## Basic fields
 
@@ -54,7 +59,7 @@ description = "SQLite database"
 
 ## Capability declarations
 
-A component declares the WASI capabilities it needs. The host uses this as a **ceiling** on what the user's policy can grant: an undeclared capability, or a declaration with an empty `allow` list, is a hard deny regardless of `--fs-allow` or `--http-allow`.
+A component declares the WASI capabilities it needs. The host uses this as a **ceiling** on what the user's policy can grant: an undeclared capability, or a declaration with an empty `allow` list, is a hard deny regardless of what the operator grants.
 
 ### Filesystem
 
@@ -82,6 +87,56 @@ methods = ["GET"]               # optional — any method if absent
 ports = [443]                   # optional — standard port for the scheme
 ```
 
+### Sockets
+
+```toml
+[std.capabilities."wasi:sockets"]
+description = "Connects to the configured Postgres server."
+
+[[std.capabilities."wasi:sockets".allow]]
+host = "*"
+ports = [5432]                  # required
+protocols = ["tcp"]
+```
+
+### Filesystem topology
+
+Beyond authorization, a filesystem declaration can bind a host directory to a stable guest path,
+so the component's code opens a fixed path regardless of who runs it. Authorization still comes
+from the `allow` entries — keep the host paths in sync:
+
+```toml
+[[std.capabilities."wasi:filesystem".params.mounts]]
+type = "bind"
+guest = "/data"
+host = "~/.my-component"
+```
+
+### Credentials
+
+A component can declare the credentials it expects, which is what `act login` prompts for:
+
+```toml
+# Bare table — the class carries no constraints, but an undeclared class is
+# denied outright, so this line is required to reach the credential store.
+[std.capabilities."act:credentials"]
+
+[[std.credentials]]
+key = "default"                 # the key a session uses when its args name none
+description = "iikoServer API user"
+
+[[std.credentials.fields]]
+key = "iiko-server:login"
+label = "iikoServer login"
+
+[[std.credentials.fields]]
+key = "iiko-server:password"
+label = "iikoServer password"
+```
+
+`act-build pack` refuses a manifest that declares `[[std.credentials]]` without the
+`act:credentials` capability.
+
 ## Agent skill embedding
 
 If a `skill/` directory exists at the package root, `act-build pack` tars it and embeds it as the `act:skill` custom section. Extract with `act skill <component.wasm> -o out/`. See [Agent Skills](/docs/build/skills/).
@@ -97,17 +152,22 @@ Checks that declared capabilities parse, that the CBOR section is readable, and 
 ## Merge order cheatsheet
 
 ```
-┌─────────────────────────┐
-│  Cargo / pyproject / package  │   defaults from the language manifest
-└─────────────────────────┘
-           ▼
-┌─────────────────────────┐
-│  SDK-emitted fields     │   macros / decorators contribute at compile time
-└─────────────────────────┘
-           ▼
-┌─────────────────────────┐
-│  act.toml (sidecar)     │   last wins — use this for per-deploy overrides
-└─────────────────────────┘
-           ▼
-     act:component (CBOR)
+┌───────────────────────────────┐
+│ Cargo / pyproject / package   │  name, version, description
+└───────────────────────────────┘
+                ▼
+┌───────────────────────────────┐
+│ [package.metadata.act]        │  inline ACT table in that same manifest
+│ [tool.act] / "act"            │
+└───────────────────────────────┘
+                ▼
+┌───────────────────────────────┐
+│ act.toml (sidecar)            │  the conventional home for capabilities
+└───────────────────────────────┘
+                ▼
+┌───────────────────────────────┐
+│ act-build pack --set k=v      │  per-invocation override (strings only)
+└───────────────────────────────┘
+                ▼
+        act:component (CBOR)
 ```

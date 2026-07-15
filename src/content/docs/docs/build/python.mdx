@@ -6,12 +6,15 @@ description: Build an ACT component in Python with componentize-py and the act-s
 ## Scaffold
 
 ```bash
-copier copy gh:actcore/act-template-python my-component
+act-build init python my-component
 cd my-component
 just init
 ```
 
-The template sets up `pyproject.toml` with `act-sdk>=0.2`, a `wit/` directory tracking [`act:tools@0.1.0`](https://github.com/actcore/act-spec/blob/main/wit/act-tools/act-tools.wit) over [`act:core@0.4.0`](https://github.com/actcore/act-spec/blob/main/wit/act-core/act-core.wit), `componentize-py` as a dev dependency, and a `justfile` with `build` / `test` / `publish`.
+`act-build init` carries the templates inside the binary — no `copier` or `uvx` needed to start.
+Pass `--http` / `--fs` to have it declare those capabilities in `act.toml` for you.
+
+The template sets up `pyproject.toml` with a current [`act-sdk`](https://pypi.org/project/act-sdk/), a `wit/` directory tracking [`act:tools`](https://github.com/actcore/act-spec/blob/main/wit/act-tools/act-tools.wit) over [`act:core`](https://github.com/actcore/act-spec/blob/main/wit/act-core/act-core.wit), `componentize-py` as a dev dependency, and a `justfile` with `build` / `test` / `publish`.
 
 ## Write a tool
 

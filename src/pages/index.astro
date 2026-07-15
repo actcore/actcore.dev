@@ -35,14 +35,14 @@ import SiteFooter from '../components/site/SiteFooter.astro';
 			</p>
 
 			<div class="hero-actions">
-				<a href="/docs/install/" class="btn btn-primary">
-					Get Started
+				<a href="/python" class="btn btn-primary">
+					Run real pandas in this tab
 					<svg width="16" height="16" viewBox="0 0 16 16" fill="none">
 						<path d="M6 3L11 8L6 13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
 					</svg>
 				</a>
-				<a href="/docs/" class="btn btn-secondary">
-					Read the Docs
+				<a href="/docs/install/" class="btn btn-secondary">
+					Get Started
 				</a>
 			</div>
 
@@ -70,7 +70,7 @@ import SiteFooter from '../components/site/SiteFooter.astro';
 						<div class="arrow arrow-2">
 							<div class="arrow-line"></div>
 							<div class="arrow-target">
-								<span class="target-icon">&#9670;</span> HTTP API
+								<span class="target-icon">&#9670;</span> MCP over HTTP
 							</div>
 						</div>
 						<div class="arrow arrow-3">
@@ -134,7 +134,7 @@ import SiteFooter from '../components/site/SiteFooter.astro';
 					</li>
 					<li>
 						<span class="li-icon check">&#10003;</span>
-						Deterministic — same SHA256 on every machine
+						Content-addressed — pinned by digest, signed to its build
 					</li>
 				</ul>
 			</div>
@@ -149,7 +149,7 @@ import SiteFooter from '../components/site/SiteFooter.astro';
 				<div class="step">
 					<div class="step-number">01</div>
 					<h3>Write</h3>
-					<p>Build your tool in Rust, Python, Go, C++, or any language that compiles to WebAssembly.</p>
+					<p>Build your tool in Rust or Python with a first-class SDK &mdash; or in any of ten more languages that reach the Component Model.</p>
 					<div class="step-code">
 						<pre><code><span class="kw">#[act_tool]</span>(description = <span class="str">"Search the index"</span>, read_only)
 <span class="kw">fn</span> <span class="fn">search</span>(query: String) -&gt; ActResult&lt;String&gt; &#123;</code></pre>
@@ -178,11 +178,11 @@ import SiteFooter from '../components/site/SiteFooter.astro';
 				<div class="step">
 					<div class="step-number">03</div>
 					<h3>Ship</h3>
-					<p>Push to an OCI registry. Signed by GitHub Actions attestation. Pull-and-run on any host with one command.</p>
+					<p>Push to an OCI registry, signed with keyless cosign in CI. Pull-and-run on any host with one command.</p>
 					<div class="step-code">
-						<pre><code>$ <span class="kw">oras push</span> ghcr.io/me/my-tool:1.0 my-tool.wasm
-$ act run ghcr.io/me/my-tool:1.0 <span class="flag">--mcp</span> <span class="flag">\</span>
-    <span class="flag">--http-policy</span> <span class="str">allowlist</span> <span class="flag">--http-allow</span> <span class="str">api.example.com</span></code></pre>
+						<pre><code>$ <span class="kw">act-build push</span> my-tool.wasm actpkg.dev/me/my-tool:1.0
+$ act run actpkg.dev/me/my-tool:1.0 <span class="flag">--mcp</span> <span class="flag">\</span>
+    <span class="flag">--allow</span> <span class="str">wasi:http</span></code></pre>
 					</div>
 				</div>
 			</div>
@@ -223,7 +223,7 @@ $ act run ghcr.io/me/my-tool:1.0 <span class="flag">--mcp</span> <span class="fl
 						</svg>
 					</div>
 					<h3>Signed lineage</h3>
-					<p>Every published component carries a GitHub Actions attestation linking artifact to source commit. Verifiable provenance, end-to-end.</p>
+					<p>Every published component is signed with keyless cosign over GitHub&rsquo;s OIDC token, binding the artifact to the workflow that built it. Verifiable provenance, no signing key to leak.</p>
 				</div>
 				<div class="feature-card">
 					<div class="feature-icon">
@@ -232,8 +232,8 @@ $ act run ghcr.io/me/my-tool:1.0 <span class="flag">--mcp</span> <span class="fl
 							<path d="M9 14l3 3 7-7" stroke="var(--amber-500)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
 						</svg>
 					</div>
-					<h3>Reproducible</h3>
-					<p>Deterministic <code>.wasm</code> output — same SHA256 on every CPU, every host. Audit once, run anywhere, prove it's the same code.</p>
+					<h3>Pinned &amp; verifiable</h3>
+					<p>Every artifact is content-addressed and resolvable by digest, with a signature binding it to the workflow that built it. Audit once, then deploy that exact digest.</p>
 				</div>
 				<div class="feature-card">
 					<div class="feature-icon">
@@ -255,8 +255,8 @@ $ act run ghcr.io/me/my-tool:1.0 <span class="flag">--mcp</span> <span class="fl
 							<line x1="14" y1="14" x2="14" y2="16" stroke="var(--amber-500)" stroke-width="1" stroke-dasharray="2 2"/>
 						</svg>
 					</div>
-					<h3>Any language</h3>
-					<p>Rust, Python, Go, C++, JS — anything that compiles to WebAssembly. The toolchain doesn't care; the security model is identical across.</p>
+					<h3>Twelve languages</h3>
+					<p>Rust and Python with an SDK; C, C++, Zig, Go, C#, Java, Kotlin, Scala, D, Lua and PHP verified end-to-end. The ceiling is enforced by the host, so the security model is identical across all of them.</p>
 				</div>
 			</div>
 		</div>

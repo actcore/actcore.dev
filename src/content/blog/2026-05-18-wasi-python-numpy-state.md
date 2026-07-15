@@ -5,6 +5,12 @@ pubDate: 2026-05-18
 author: actcore
 ---
 
+> **Update (2026-08):** this has since been solved. The `python-env` component now ships
+> **numpy 2.5.0, pandas 3.0.3 and Pillow** compiled for wasm, using the WebAssembly
+> exception-handling proposal rather than the wheels this post was waiting on. You can run
+> pandas in a browser tab on the [Python playground](/python). The analysis below is kept
+> as a record of where WASI Python stood in May 2026.
+
 Three weeks ago I packaged a CPython 3.14 interpreter as a WebAssembly
 component. The pitch is simple: AI agents need to execute untrusted
 Python code, and today's options ([E2B](https://e2b.dev),

@@ -1,9 +1,9 @@
 ---
 title: What is ACT
-description: A single WebAssembly component that serves AI agents, apps, CLI, and browsers through one self-documenting protocol.
+description: A single WebAssembly component that serves AI agents, the CLI, and browsers through one self-documenting protocol.
 ---
 
-ACT — *Agent Component Tools* — is a protocol for packaging tools as WebAssembly components. One `.wasm` file works from any host: agents via MCP, applications via HTTP, developers via CLI, browsers via jco.
+ACT — *Agent Component Tools* — is a protocol for packaging tools as WebAssembly components. One `.wasm` file works from any host: agents via MCP (stdio or HTTP), developers via the CLI, browsers via the web runtime.
 
 ## Why another protocol
 
@@ -11,10 +11,10 @@ Tools today are scattered across MCP servers, OpenAPI backends, ad-hoc REST APIs
 
 | Problem | ACT |
 |---|---|
-| One codebase per transport (MCP server, REST backend, CLI) | One `.wasm`, four transports (MCP, HTTP, CLI, browser) |
+| One codebase per transport (MCP server, REST backend, CLI) | One `.wasm`, served over MCP (stdio or HTTP), the CLI, or in the browser |
 | Tools run with full OS access | Deny-by-default filesystem + network sandbox; capabilities are declared in the component and intersected with host policy |
 | Metadata drift across `Cargo.toml` / `pyproject.toml` / `package.json` | Merged at build time into a signed `act:component` custom section |
-| "Works on my machine" | Deterministic `.wasm` binary — same SHA256 on any CPU, any host, any transport |
+| "Works on my machine" | One `.wasm` artifact, pinned by digest and signed to the workflow that built it — the same bytes wherever it runs |
 
 ## Architecture in one picture
 
@@ -22,19 +22,19 @@ Tools today are scattered across MCP servers, OpenAPI backends, ad-hoc REST APIs
 graph TD
     Component["component.wasm<br/>(tool-provider + act:component)"]
     Host["act host<br/>(wasmtime, capability-gated)"]
-    MCP["MCP stdio"]
-    HTTP["ACT-HTTP"]
+    Stdio["MCP over stdio"]
+    Http["MCP over Streamable HTTP<br/>(/mcp)"]
     CLI["act call"]
-    Browser["Browser<br/>(jco)"]
+    Browser["Browser runtime<br/>(+ WebMCP)"]
 
     Component --> Host
-    Host --> MCP
-    Host --> HTTP
+    Host --> Stdio
+    Host --> Http
     Host --> CLI
     Component -.-> Browser
 ```
 
-Every component exports the `tool-provider` interface from [`act:tools@0.1.0`](https://github.com/actcore/act-spec/blob/main/wit/act-tools/act-tools.wit). Stateful components additionally export [`act:sessions@0.1.0`](https://github.com/actcore/act-spec/blob/main/wit/act-sessions/act-sessions.wit) — used by the bridges (mcp-bridge, openapi-bridge, act-http-bridge) and any component with a session lifecycle. Both depend on [`act:core@0.4.0`](https://github.com/actcore/act-spec/blob/main/wit/act-core/act-core.wit) for cross-cutting types. The host reads each component's metadata from a WASM custom section (`act:component`, CBOR) without instantiating it, then exposes the tools over any of four transports.
+Every component exports the `tool-provider` interface from [`act:tools@0.2.0`](https://github.com/actcore/act-spec/blob/main/wit/act-tools/act-tools.wit). Stateful components additionally export [`act:sessions@0.2.0`](https://github.com/actcore/act-spec/blob/main/wit/act-sessions/act-sessions.wit) — used by the bridges (mcp-bridge, openapi-bridge, act-http-bridge) and any component with a session lifecycle. Both depend on [`act:core@0.4.0`](https://github.com/actcore/act-spec/blob/main/wit/act-core/act-core.wit) for cross-cutting types. The host reads each component's metadata from a WASM custom section (`act:component`, CBOR) without instantiating it, then exposes the tools over MCP — on stdio or over HTTP.
 
 ## What's in the box
 
@@ -43,7 +43,14 @@ Every component exports the `tool-provider` interface from [`act:tools@0.1.0`](h
 - **`act-sdk` (Rust)** — `#[act_component]` / `#[act_tool]` macros.
 - **`act-sdk` (Python)** — `@component` / `@tool` decorators via `componentize-py`.
 - **Spec** — [`actcore/act-spec`](https://github.com/actcore/act-spec). WIT is normative; JSON Schema is derived.
-- **Components** — a growing set under [`ghcr.io/actpkg`](https://github.com/orgs/actpkg/packages): `sqlite`, `http-client`, `crypto`, `encoding`, `filesystem`, `openwallet`, `python-eval`, `js-eval`, `act-http-bridge`, `mcp-bridge`, `openapi-bridge`, `random`, `time`.
+- **Components** — 22 published under [`actpkg.dev/library`](https://actpkg.dev):
+  - *Data & storage* — `sqlite`, `postgres`, `filesystem`, `archive`
+  - *Network* — `http-client`, `search-brave`, `search-searxng`
+  - *Documents* — `anydoc`, `pdf-inspector`
+  - *Compute* — `python-env` (numpy + pandas), `python-eval`, `sed`
+  - *Browser & desktop* — `webdriver-bidi`, `vnc-desktop`
+  - *Bridges* — `mcp-bridge`, `openapi-bridge`, `act-http-bridge`
+  - *Utilities* — `crypto`, `encoding`, `random`, `time`, `openwallet`
 
 ## Next
 

@@ -83,6 +83,7 @@ export default defineConfig({
                     { slug: 'docs/build/manifest' },
                     { slug: 'docs/build/skills' },
                     { slug: 'docs/build/testing' },
+                    { slug: 'docs/build/languages' },
                 ],
             },
             {

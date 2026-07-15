@@ -7,9 +7,13 @@ The WIT is the source of truth for the protocol. JSON Schema, OpenAPI, and MCP s
 
 | Package | Status | What's in it |
 |---|---|---|
-| [`act:core@0.4.0`](https://github.com/actcore/act-spec/blob/main/wit/act-core/act-core.wit) | Normative | Cross-cutting types: `metadata`, `error`, `localized-string`, `cbor` |
-| [`act:tools@0.1.0`](https://github.com/actcore/act-spec/blob/main/wit/act-tools/act-tools.wit) | Normative | The `tool-provider` interface — every component exports it |
-| [`act:sessions@0.1.0`](https://github.com/actcore/act-spec/blob/main/wit/act-sessions/act-sessions.wit) | Normative, opt-in | The `session-provider` interface — stateful components only |
+| [`act:core@0.4.0`](https://github.com/actcore/act-spec/blob/main/wit/act-core/act-core.wit) | Normative | Cross-cutting types: `cbor`, `metadata`, `error`, `localized-string` |
+| [`act:tools@0.2.0`](https://github.com/actcore/act-spec/blob/main/wit/act-tools/act-tools.wit) | Normative | The tool data model plus the `tool-provider` interface — every component exports it |
+| [`act:sessions@0.2.0`](https://github.com/actcore/act-spec/blob/main/wit/act-sessions/act-sessions.wit) | Normative, opt-in | `session-provider` — stateful components only |
+| [`act:credentials@0.1.0`](https://github.com/actcore/act-spec/blob/main/wit/act-credentials/act-credentials.wit) | Normative, opt-in | Credential store. A host **import**: the host implements it, the component imports it |
+| [`act:consent@0.1.0`](https://github.com/actcore/act-spec/blob/main/wit/act-consent/act-consent.wit) | Normative, opt-in, unimplemented | `consent-authority` — a component asks the host to authorize a *semantic* action |
+| [`act:tools-sync@0.1.0`](https://github.com/actcore/act-spec/blob/main/wit/act-tools-sync/act-tools-sync.wit) | Compatibility tier | Sync mirror of `tool-provider`, for toolchains whose async/stream codegen isn't ready |
+| [`act:sessions-sync@0.1.0`](https://github.com/actcore/act-spec/blob/main/wit/act-sessions-sync/act-sessions-sync.wit) | Compatibility tier | Sync mirror of `session-provider` |
 | [`act:events@0.1.0`](https://github.com/actcore/act-spec/blob/main/wit/act-events/act-events.wit) | Informative / RFC | `event-provider` (pub/sub) |
 | [`act:resources@0.1.0`](https://github.com/actcore/act-spec/blob/main/wit/act-resources/act-resources.wit) | Informative / RFC | `resource-provider` |
 
@@ -43,18 +47,24 @@ interface types {
 }
 ```
 
-## `act:tools@0.1.0` — tool-provider
+## `act:tools@0.2.0` — types + tool-provider
+
+The data model lives in its own `types` interface, deliberately free of functions and of the
+`stream<>`-bearing `tool-result`. That split is the whole point of the 0.2.0 bump: a sync-shim
+adapter, or a generator whose async codegen is immature, can `use act:tools/types` without
+pulling in the async signatures.
 
 ```wit
-package act:tools@0.1.0;
+package act:tools@0.2.0;
 
-interface tool-provider {
-  use act:core/types@0.4.0.{cbor, localized-string, metadata, error};
+interface types {
+  use act:core/types@0.4.0.{localized-string, metadata, error};
 
   record tool-definition {
     name: string,
     description: localized-string,
-    parameters-schema: string,    // JSON Schema as a string
+    /// JSON Schema (hosts MAY also accept JSON Structure, detected via `$schema`).
+    parameters-schema: string,
     metadata: metadata,
   }
 
@@ -64,29 +74,32 @@ interface tool-provider {
     metadata: metadata,
   }
 
+  /// `error` is terminal — no further events follow.
   variant tool-event {
     content(content-part),
-    error(error),                 // terminal
-  }
-
-  variant tool-result {
-    immediate(list<tool-event>),
-    streaming(stream<tool-event>),
+    error(error),
   }
 
   record list-tools-response {
     metadata: metadata,
     tools: list<tool-definition>,
   }
+}
 
-  list-tools: async func(metadata: metadata)
-      -> result<list-tools-response, error>;
+interface tool-provider {
+  use act:core/types@0.4.0.{cbor, metadata, error};
+  use types.{tool-event, list-tools-response};
 
-  call-tool: async func(
-    name: string,
-    arguments: cbor,
-    metadata: metadata,
-  ) -> tool-result;
+  /// The only type in the package carrying a `stream<>`, which is why it
+  /// lives here rather than in `types`.
+  variant tool-result {
+    immediate(list<tool-event>),
+    streaming(stream<tool-event>),
+  }
+
+  list-tools: async func(metadata: metadata) -> result<list-tools-response, error>;
+
+  call-tool: async func(name: string, arguments: cbor, metadata: metadata) -> tool-result;
 }
 ```
 
@@ -97,20 +110,25 @@ Both variants have identical observable semantics — an ordered sequence of `to
 - **`immediate(list<tool-event>)`** — natural for sync guest bodies and languages without an async runtime; the whole event list is materialized on return.
 - **`streaming(stream<tool-event>)`** — natural for long-running or I/O-bound tools; events flow as they're produced.
 
-## `act:sessions@0.1.0` — session-provider (opt-in)
+## `act:sessions@0.2.0` — session-provider (opt-in)
 
 Stateful components — bridges, REPLs, DB connections, browser automation — additionally export `session-provider`. Agents address per-session state via `std:session-id` metadata on subsequent `tool-provider` calls. See [ACT-SESSIONS](https://github.com/actcore/act-spec/blob/main/spec/ACT-SESSIONS.md).
 
 ```wit
-package act:sessions@0.1.0;
+package act:sessions@0.2.0;
 
-interface session-provider {
-  use act:core/types@0.4.0.{metadata, error};
+interface types {
+  use act:core/types@0.4.0.{metadata};
 
   record session {
     id: string,
     metadata: metadata,
   }
+}
+
+interface session-provider {
+  use act:core/types@0.4.0.{metadata, error};
+  use types.{session};
 
   /// JSON Schema for valid `args` to open-session.
   get-open-session-args-schema: async func(metadata: metadata)

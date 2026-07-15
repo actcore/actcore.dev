@@ -1,6 +1,6 @@
 ---
 title: CLI reference
-description: Complete act and act-build command and flag surface for 0.7.x.
+description: Complete act and act-build command and flag surface.
 ---
 
 ## `act`
@@ -9,47 +9,74 @@ description: Complete act and act-build command and flag surface for 0.7.x.
 act <COMMAND>
 
 Commands:
-  run      Load a .wasm component and serve it (HTTP or MCP) or a one-shot CLI call
+  run      Load a .wasm component and serve it over MCP
   call     Call a tool directly and print the result
   info     Show component info and optionally list tools
   skill    Extract embedded Agent Skills from a component
   pull     Pull a component from a registry
-  session  Manage component sessions (open-args-schema, open, close)
+  session  Inspect `act:sessions/session-provider` (open-args-schema)
+  store    Manage the local component store (list, update, gc)
+  inspect  Inspect a component artifact (read-only, no instantiation)
+  secret   Manage stored credentials. There is no `get`: a value is never printed
+  login    Provision a credential a component declares it expects, by prompting
 ```
 
-All subcommands that take a component accept three reference forms: a local path, an HTTP(S) URL, or an OCI registry ref (e.g. `ghcr.io/actpkg/sqlite:latest`). Remote components are cached in `~/.cache/act/components/`.
+All subcommands that take a component accept three reference forms: a local path, an HTTP(S) URL, or an OCI registry ref (e.g. `actpkg.dev/library/sqlite:latest`). Remote components are cached in `~/.cache/act/components/`.
 
 ### Common flags
 
+Carried by every subcommand that instantiates a component (`run`, `call`, `info --tools`,
+`session`, `inspect tools`).
+
 | Flag | Description |
 |---|---|
+| `--grant <json>` | Full JSON grant: `{"<id>": "open" \| {"mode":…,"allow":[…],"deny":[…]}}`. Repeatable, merged |
+| `--allow <id>` | Open a capability class by id, up to its declared ceiling. Repeatable |
+| `--deny <id>` | Deny a capability class by id. Repeatable |
+| `-m, --metadata <KEY=VALUE>` | Per-call metadata, string value. Repeatable |
+| `--metadata-json <json>` | Per-call metadata as a JSON object (typed values) |
+| `--metadata-file <path>` | Read metadata from a JSON file |
+| `--max-memory <size>` | Cap guest linear memory (`512MiB`, `512MB`, or a byte count) |
+| `--no-audit` | Disable the audit trail. The only thing that does — `RUST_LOG` cannot |
+| `--audit-args` | Record full tool arguments instead of a digest. Can expose credentials |
+| `--credentials-backend <backend>` | Credential store this run reads from (`file:<path>`) |
 | `--profile <name>` | Activate a profile from `~/.config/act/config.toml` |
 | `--config <path>` | Use an alternate config file |
-| `--metadata <json>` | Per-call metadata (CLI > profile) |
-| `--metadata-file <path>` | Read metadata from file |
-| `--fs-policy <deny\|allowlist\|open>` | Filesystem policy mode (default: `deny`) |
-| `--fs-allow <glob>` | Add filesystem allow entry (repeatable) |
-| `--fs-deny <glob>` | Add filesystem deny entry |
-| `--http-policy <deny\|allowlist\|open>` | HTTP policy mode (default: `allowlist`) |
-| `--http-allow <spec>` | Add HTTP allow entry (`host=…;scheme=…;methods=…;ports=…`) |
-| `--http-deny <spec>` | Add HTTP deny entry |
 
-See [Policy & sandbox](/docs/host/policy/) for flag semantics.
+There are no per-class policy flags and no `ACT_*` policy environment variables — grants come
+from these flags, profiles, and the config `[policy]` section only. Default mode is `ask`, which
+degrades to deny where there is no prompt channel. See
+[Policy & sandbox](/docs/host/policy/) for constraint shapes and semantics.
 
 ### `act run`
 
 ```bash
-act run <component> [--mcp | --http] [--listen <addr>] [policy flags...]
+act run <component> --mcp [--http] [-l <addr>] [--session-args <json>] [grant flags...]
 ```
 
-Host the component over MCP stdio (`--mcp`) or ACT-HTTP (`--http`). `--listen` accepts either a port number (binds `[::1]:<port>`) or a full `addr:port`.
+Serve the component over MCP. `--mcp` alone speaks MCP on stdio; adding `--http` serves the same
+MCP server over Streamable HTTP at `/mcp`. `-l` / `--listen` accepts either a port number (binds
+`[::1]:<port>`) or a full `addr:port`, and defaults to `[::1]:3000`.
 
-Default without `--mcp`/`--http`: `--http` on `[::1]:3000`.
+A transport is required — there is no default:
+
+```console
+$ act run <component>
+Error: Specify a transport: --mcp (stdio), or --mcp --http (MCP over HTTP)
+```
+
+`--http` requires `--mcp`, and `--listen` requires `--http`. **ACT-HTTP — the REST binding with
+`/info`, `/tools`, `/tools/{name}` and `/sessions` — was removed in 0.12.0**; `--http` on its own
+now fails with a message naming the replacement. See [Transports](/docs/host/transports/).
+
+`--session-args '<json>'` pre-opens one session at startup and serves the component as a
+session-of-1: the session machinery is hidden from clients and any client-supplied
+`std:session-id` is ignored.
 
 ### `act call`
 
 ```bash
-act call <component> <tool> [--args <json>] [--metadata <json>] [policy flags...]
+act call <component> <tool> [--args <json>] [--session-args <json>] [common flags...]
 ```
 
 One-shot invocation. Writes stdout, exits. For scripts and debugging.
@@ -57,10 +84,12 @@ One-shot invocation. Writes stdout, exits. For scripts and debugging.
 ### `act info`
 
 ```bash
-act info <component> [--tools] [--format text|json]
+act info <component> [--tools] [--format text|json|toon]
 ```
 
-Reads the `act:component` custom section (no instantiation). With `--tools`, also instantiates the component and calls `list-tools`.
+Reads the `act:component` custom section (no instantiation). With `--tools`, also instantiates the
+component and calls `list-tools`. `toon` is [Token-Oriented Object Notation](https://toonformat.dev/) —
+the same data as `json` in roughly 40% fewer tokens, for when the reader is a model.
 
 ### `act skill`
 
@@ -78,23 +107,113 @@ act pull <ref> [-o <file>] [-O]
 
 Downloads a component from OCI or HTTP. `-o` writes to an explicit path; `-O` uses the basename of the ref.
 
+### `act session`
+
+```bash
+act session open-args-schema <component>
+```
+
+Prints the JSON Schema a component accepts for `open-session` args. It is the only leaf: opening
+or closing a session from a one-shot CLI invocation cannot keep the underlying wasm state alive,
+so for real session work use `act run --mcp` (the host process holds the instance, and the
+session lives as long as the host) or `--session-args` on `act call`.
+
+### `act store`
+
+```bash
+act store list [--format text|json|toon]
+act store update [<ref>]
+act store gc
+```
+
+Manages the local component store under `~/.cache/act/components/`. `update` re-resolves stored
+components and re-pulls any whose digest moved — omit the ref to update everything. `gc` deletes
+blobs no longer referenced by any component.
+
+### `act inspect`
+
+```bash
+act inspect component-manifest <ref> [--format json|toon]
+act inspect tools <ref> [--format json|toon] [common flags...]
+```
+
+The raw, machine-facing counterpart to `act info`. `component-manifest` prints the decoded
+`act:component` manifest verbatim without instantiating anything — this is what CI uses to assert
+a component is actually packed:
+
+```bash
+act inspect component-manifest my-tool.wasm | jq -r .std.version
+```
+
+`tools` dumps the `list-tools` response verbatim, as distinct from the curated `act info --tools`.
+
+### `act secret`
+
+```bash
+act secret set <component> --field <NAME[=TYPE]> [--key <key>] [--description <text>]
+act secret list
+act secret rm <component> [--key <key>]
+```
+
+Manages stored credentials. **There is no `get` — a stored value is never printed.** `list` shows
+key, kind, description, and expiry only.
+
+A credential *is* its set of named fields: `--field acme:username --field acme:password` is a
+password, `--field acme:token` is a single API token. No field name is well-known — whoever
+stores the credential names it, in their own namespace (`std:` is reserved and refused). Use
+`--field NAME=TYPE` for a value that isn't a plain string, e.g.
+`--field acme:token=std:oauth2`.
+
+The component reference is the profile namespace, so a credential is scoped to the component that
+will read it. For non-interactive use, `--fields-stdin` reads a JSON field map from stdin and
+`--from-command` runs a command and reads one from its stdout.
+
+### `act login`
+
+```bash
+act login <component> [--key <key>] [--force]
+```
+
+Provisions a credential the component *declares* it expects — its `[[std.credentials]]` entries —
+by prompting for each field. Omit `--key` when the component declares exactly one. There is no
+non-interactive form; use `act secret set` for that. An existing credential is reported and left
+alone unless you pass `--force`.
+
 ## `act-build`
 
 ```
 act-build <COMMAND>
 
 Commands:
+  init      Scaffold a new component from a language template
   pack      Embed act:component, act:skill, and version/description custom sections
   validate  Validate a packed component without modifying it
+  push      Publish a WASM component as a CNCF Wasm OCI Artifact
 ```
+
+### `act-build init`
+
+```bash
+act-build init <rust|python|js> [name] [-o <dir>] [--http] [--fs] [--description <text>]
+```
+
+Scaffolds a working component skeleton, ready for `just init && just build`. The templates are
+carried **inside the binary** — no `copier`, `uvx`, or Python toolchain is involved. Omit the name
+to scaffold into the current directory, `cargo init`-style. `--http` / `--fs` declare those
+capabilities in the generated `act.toml`. `--no-git` skips `git init`.
 
 ### `act-build pack`
 
 ```bash
-act-build pack <component.wasm>
+act-build pack <component.wasm> [--set <KEY=VALUE>]
 ```
 
-Resolves metadata from (in order): the language manifest, SDK-emitted fields, and an optional `act.toml` sidecar. Writes four custom sections:
+Resolves metadata by merge-patch, each layer overriding the previous: the language manifest's
+basics, then that manifest's inline ACT table (`[package.metadata.act]`, `[tool.act]`, or `"act"`
+in `package.json`), then an optional `act.toml` sidecar. `--set` applies a final override on top,
+e.g. `--set std.name=sqlite-vec`; values are set as strings, so only string-typed fields
+(`name`, `version`, `description`, `default-language`) can be set this way. Writes four custom
+sections:
 
 - `act:component` — CBOR-encoded metadata
 - `version` — raw version string (used by SBOM tools)
@@ -109,12 +228,36 @@ act-build validate <component.wasm>
 
 Parses the `act:component` section, verifies capability declarations, and confirms the file is a valid WASM component. Non-zero exit on invalid input.
 
+### `act-build push`
+
+```bash
+act-build push <component.wasm> <reference> [--also-tag <tag>] [--source <url>] [--dry-run]
+```
+
+Publishes the component as a [CNCF Wasm OCI Artifact](https://tag-runtime.cncf.io/wgs/wasm/deliverables/wasm-oci-artifact/):
+the bytes as a single `application/wasm` layer with an `application/vnd.wasm.config.v0+json`
+config blob, so registry-side tooling can read the artifact's shape without pulling the layer.
+
+| Flag | Purpose |
+|---|---|
+| `--also-tag <tag>` | Apply an extra tag to the same manifest (repeatable) |
+| `--annotation <k=v>` | Extra manifest annotation (repeatable) |
+| `--source <url>` | Set `org.opencontainers.image.source` (env: `ACT_SOURCE`) |
+| `--description <text>` | Override `org.opencontainers.image.description` (env: `ACT_DESCRIPTION`) |
+| `--skip-if-identical` | Skip when the tag exists with the same layer digest; error if it differs |
+| `--skip-if-exists` | Skip whenever any manifest exists for the tag |
+| `--dry-run` | Compute everything without pushing or authenticating |
+| `--format json` | Emit `{reference, status, digest, tags}` on stdout |
+
+The reference falls back to the `ACT_REFERENCE` environment variable.
+
 ## Environment
 
 | Variable | Purpose |
 |---|---|
 | `ACT` | Override the `act` binary used by justfiles (default: `npx @actcore/act`) |
 | `ACT_BUILD` | Override the `act-build` binary used by justfiles |
-| `HURL` | Override the `hurl` binary |
-| `OCI_REGISTRY` | Default registry for `just publish` (default: `ghcr.io/actpkg`) |
-| `RUST_LOG` / `ACT_LOG` | Tracing filter. Use `act=info` to filter the host. |
+| `OCI_REGISTRY` | Publish target for `just publish` (default: `actpkg.dev/<owner>`) |
+| `OCI_REF` | Full publish ref, used by the Rust template instead of `OCI_REGISTRY` |
+| `ACT_REFERENCE` | Fallback ref for `act-build push` when none is given on the command line |
+| `RUST_LOG` | Tracing filter. Use `act=info` to filter the host. Note this cannot silence the audit trail — use `--no-audit`. |

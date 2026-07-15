@@ -12,6 +12,19 @@ cover_image: https://actcore.dev/blog/introducing-act-cover.png
 draft: false
 ---
 
+> **Update (2026-08):** ACT-HTTP — the REST binding with `/info`, `/tools` and
+> `/sessions` — was removed in `act` 0.12.0. MCP is now ACT's transport on the wire:
+> use `--mcp` for stdio or `--mcp --http` for MCP over Streamable HTTP at `/mcp`.
+> The commands below that use `act run --http` no longer work as written; everything
+> about sessions and components themselves still holds. See
+> [Transports](/docs/host/transports/).
+
+> **Update (2026-08):** the per-class policy flags used below — `--fs-policy`,
+> `--fs-allow`, `--http-policy`, `--http-allow` and friends — were replaced by a uniform
+> grant model (`--grant`, `--allow`, `--deny`), and the default mode is now `ask` rather
+> than deny. The capability-ceiling model this post describes is unchanged; only the flag
+> spelling is. See [Policy & sandbox](/docs/host/policy/).
+
 Setting up an MCP server for your AI agent today usually looks like this:
 
 ```bash
@@ -35,7 +48,7 @@ That's the core trade ACT offers. The rest of this post is about why the WebAsse
 A side benefit of picking WebAssembly: the artifact is a single binary that runs everywhere.
 
 ```bash
-act info ghcr.io/actpkg/random:latest --tools
+act info actpkg.dev/library/random:latest --tools
 ```
 
 That command pulls a small component from GitHub's container registry, reads its metadata from a WASM custom section (no instantiation), and prints the tools it exposes. First pull is cached, every subsequent invocation hits the local `~/.cache/act/components`. The artifact is signed by GitHub's attestation workflow and comes with an SBOM — all upstream machinery; ACT just uses it.
@@ -70,19 +83,19 @@ Because tools are components, not native processes, the host can serve them over
 
 ```bash
 # Claude Desktop / Cursor / Cline → stdio JSON-RPC
-act run ghcr.io/actpkg/sqlite:latest --mcp \
+act run actpkg.dev/library/sqlite:latest --mcp \
   --fs-policy allowlist --fs-allow /tmp/demo.sqlite
 
 # Web backend → REST-ish HTTP with SSE streaming
-act run ghcr.io/actpkg/sqlite:latest --http --listen "[::1]:3000"
+act run actpkg.dev/library/sqlite:latest --http --listen "[::1]:3000"
 
 # Script / CI → one-shot direct call
-act call ghcr.io/actpkg/sqlite:latest query \
+act call actpkg.dev/library/sqlite:latest query \
   --args '{"sql": "SELECT sqlite_version()"}' \
   --metadata '{"database_path":"/tmp/demo.sqlite"}'
 
 # Browser tab → jco transpile, no server at all
-jco transpile ghcr.io/actpkg/sqlite:latest -o dist/
+jco transpile actpkg.dev/library/sqlite:latest -o dist/
 ```
 
 Same component, same tool, four deployments. Whatever new transport shows up next, the component doesn't change.
@@ -111,7 +124,7 @@ mod component {
 
 Early, and deliberately narrow.
 
-The core spec lives in [actcore/act-spec](https://github.com/actcore/act-spec) — a small WIT package for cross-cutting types and an opt-in interface package for tool dispatch, with stateful capabilities (sessions, events, resources) layered on as separate opt-in packages. The host ships as `act` on npm, cargo, and PyPI. A growing set of components is published on [`ghcr.io/actpkg`](https://github.com/orgs/actpkg/packages) — `sqlite`, `http-client`, `crypto`, `encoding`, `filesystem`, `openwallet`, `python-eval`, `js-eval`, `random`, `time`, plus three bridges (`mcp-bridge`, `openapi-bridge`, `act-http-bridge`). Rust and Python SDKs are live; JavaScript via `componentize-js` is [blocked on upstream async-export support](https://github.com/bytecodealliance/ComponentizeJS/issues/335).
+The core spec lives in [actcore/act-spec](https://github.com/actcore/act-spec) — a small WIT package for cross-cutting types and an opt-in interface package for tool dispatch, with stateful capabilities (sessions, events, resources) layered on as separate opt-in packages. The host ships as `act` on npm, cargo, and PyPI. A growing set of components is published on [`actpkg.dev/library`](https://actpkg.dev) — `sqlite`, `http-client`, `crypto`, `encoding`, `filesystem`, `openwallet`, `python-eval`, `js-eval`, `random`, `time`, plus three bridges (`mcp-bridge`, `openapi-bridge`, `act-http-bridge`). Rust and Python SDKs are live; JavaScript via `componentize-js` is [blocked on upstream async-export support](https://github.com/bytecodealliance/ComponentizeJS/issues/335).
 
 More on the architecture:
 
