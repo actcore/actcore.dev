@@ -65,9 +65,8 @@ $ act run <component>
 Error: Specify a transport: --mcp (stdio), or --mcp --http (MCP over HTTP)
 ```
 
-`--http` requires `--mcp`, and `--listen` requires `--http`. **ACT-HTTP — the REST binding with
-`/info`, `/tools`, `/tools/{name}` and `/sessions` — was removed in 0.12.0**; `--http` on its own
-now fails with a message naming the replacement. See [Transports](/docs/host/transports/).
+`--http` requires `--mcp`, and `--listen` requires `--http`; either one alone is an error. See
+[Transports](/docs/host/transports/).
 
 `--session-args '<json>'` pre-opens one session at startup and serves the component as a
 session-of-1: the session machinery is hidden from clients and any client-supplied

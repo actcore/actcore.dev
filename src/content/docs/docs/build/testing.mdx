@@ -7,12 +7,6 @@ Every published component tests its tools end-to-end the same way: run the packe
 `act run --mcp` and drive it with a **real MCP client**, so what the tests observe is exactly what
 an agent observes. Both scaffolding templates generate this suite.
 
-:::note[This replaced an HTTP-based harness]
-Components used to be tested by booting `act run --http` and firing [hurl](https://hurl.dev/)
-requests at the ACT-HTTP REST endpoints. That binding was removed in 0.12.0 — see
-[Transports](/docs/host/transports/) — and the whole fleet moved to the MCP-driven suite below.
-:::
-
 ## The recipe
 
 ```makefile

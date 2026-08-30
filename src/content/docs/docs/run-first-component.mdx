@@ -79,6 +79,60 @@ See [Transports](/docs/host/transports/).
 </TabItem>
 </Tabs>
 
+## Wire it into your agent
+
+Rather than typing that command, put it in your MCP client's config. In Claude Code that is
+`.mcp.json` at the root of the project:
+
+```json
+{
+  "mcpServers": {
+    "sqlite": {
+      "command": "npx",
+      "args": [
+        "@actcore/act", "run", "actpkg.dev/library/sqlite", "--mcp",
+        "--session-args", "{\"database_path\": \"/tmp/actdemo/app.sqlite\"}",
+        "--grant", "{\"wasi:filesystem\":{\"mode\":\"allowlist\",\"allow\":[{\"path\":\"/tmp/actdemo/**\",\"mode\":\"rw\"},{\"path\":\"/dev/urandom\",\"mode\":\"ro\"}]}}"
+      ]
+    }
+  }
+}
+```
+
+Each flag is its own array element, and the JSON values passed to `--grant` and `--session-args`
+are strings, so their quotes are escaped. If you have `act` on `$PATH`, use `"command": "act"`
+and drop the leading `"@actcore/act"` argument.
+
+The equivalent one-liner, if you would rather not edit the file by hand:
+
+```bash
+claude mcp add sqlite -- npx @actcore/act run actpkg.dev/library/sqlite --mcp \
+  --grant '{"wasi:filesystem":{"mode":"allowlist","allow":[{"path":"/tmp/actdemo/**","mode":"rw"},{"path":"/dev/urandom","mode":"ro"}]}}'
+```
+
+For a component you serve over HTTP instead, point the client at the endpoint:
+
+```json
+{
+  "mcpServers": {
+    "sqlite": { "type": "http", "url": "http://[::1]:3000/mcp" }
+  }
+}
+```
+
+### Why this file is worth committing
+
+`.mcp.json` lives in the repository, so the **grant travels with the project**. Everyone who
+opens it gets the same component at the same version with the same capability ceiling — rather
+than each developer running an `npx` tool with ambient access to their whole machine and hoping
+it behaves. A reviewer can read the diff and see exactly what a new tool is allowed to touch.
+
+:::caution[Don't put secrets in it]
+It is a committed file. Credentials belong in the credential store, not in `env` or in
+`--session-args`: run `act login <component>` once, or `act secret set`, and the component reads
+them at session open. See [`act secret`](/docs/reference/cli/#act-secret).
+:::
+
 ## Where did the `.wasm` go?
 
 `act` cached it to `~/.cache/act/components/`. Subsequent runs skip the network. `act store list`

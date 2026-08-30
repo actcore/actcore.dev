@@ -66,22 +66,9 @@ curl -X POST http://[::1]:3000/mcp \
 real prompt channel, this transport can resolve `ask`-mode capability requests through MCP
 elicitation, exactly as stdio does.
 
-:::caution[ACT-HTTP, the REST binding, was removed in 0.12.0]
-Earlier releases had a second HTTP server — a REST-ish binding with `/info`, `/tools`,
-`/tools/{name}` and `/sessions` endpoints — reachable via `act run --http` or a bare
-`act run --listen`. It is gone. Those paths now return `404`, and the flags fail loudly rather
-than quietly serving a different protocol:
-
-```console
-$ act run <component> --http
-Error: ACT-HTTP (the REST binding) was removed in 0.12.0. Use `--mcp` for MCP over stdio,
-or `--mcp --http` to serve MCP over Streamable HTTP at /mcp on --listen.
-
-$ act run <component>
-Error: Specify a transport: --mcp (stdio), or --mcp --http (MCP over HTTP)
-```
-
-If you were consuming the REST endpoints, the replacement is an MCP client against `/mcp`.
+:::note[`/mcp` is the only endpoint]
+The server exposes nothing else — there is no REST surface to browse. Everything, including
+listing tools and opening sessions, is MCP over that one path.
 :::
 
 ## CLI direct
