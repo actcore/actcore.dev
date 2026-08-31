@@ -1,0 +1,97 @@
+---
+title: Browser runtime
+description: Running a component in a tab with no server — the same artifact, the same capability ceiling, plus a WebMCP bridge for agents running in the browser.
+---
+
+A component does not need a host process. `@actcore/web-runtime` loads the same signed `.wasm` in
+a browser tab and runs it there — no server, no install, and nothing to trust on the user's
+machine beyond the page they already opened.
+
+This is the shape behind the [Python playground](/python): real numpy and pandas, executing in the
+tab, with the sandbox enforced client-side.
+
+## Loading a component
+
+The runtime **transpiles in the tab**, using jco's in-browser transpiler. There is no build step
+for the tool — you hand it bytes:
+
+```ts
+import { runComponent } from '@actcore/web-runtime';
+
+const wasm = new Uint8Array(await (await fetch('/time.wasm')).arrayBuffer());
+
+const { toolProvider } = await runComponent(wasm, {
+  // Where @bytecodealliance/preview2-shim's browser build lives — a CDN,
+  // your bundler's resolved path, or a vendored copy.
+  shimBase: 'https://esm.sh/@bytecodealliance/preview2-shim@0.19.0/dist/browser/',
+});
+```
+
+`shimBase` is required: the runtime drives jco's bindgen directly and passes its own WASI
+specifier map, so it needs a concrete location rather than a guess.
+
+## Calling tools
+
+The same interface as everywhere else — CBOR arguments in, an event sequence out:
+
+```ts
+const { tools } = await toolProvider.listTools([]);
+// [{ name: 'get_current_time', description: …, parametersSchema: … }]
+
+const result = await toolProvider.callTool(
+  'get_current_time',
+  new Uint8Array([0xa0]),   // CBOR {} — empty args
+  [],
+);
+
+if (result.tag === 'immediate') {
+  for (const ev of result.val) {
+    if (ev.tag === 'content') console.log(new TextDecoder().decode(ev.val.data));
+  }
+}
+```
+
+Both `tool-result` arms work, and `session-provider` components are supported, so a stateful
+component behaves in the tab as it does natively.
+
+## The sandbox is enforced here too
+
+This is the part that makes it more than a demo. The runtime carries ACT's policy engine, so the
+model from [Policy & sandbox](/docs/host/policy/) applies unchanged: the component's declared
+ceiling bounds what a grant can open, `ask` mode prompts the person looking at the page, and
+decisions land in an audit trail.
+
+The runtime ships its own `wasi:http` and `wasi:sockets` shims rather than passing browser `fetch`
+through untouched, which is what lets a network call be gated instead of merely observed.
+
+**Requirement:** [JSPI](https://github.com/WebAssembly/js-promise-integration) — the runtime
+throws a clear error where it is unavailable.
+
+**Not yet:** pulling straight from an OCI registry, and verifying the artifact's signature in the
+page. Both are follow-up work; today you fetch the bytes yourself.
+
+## WebMCP: tools for the agent in the user's browser
+
+A loaded component's tools can be registered on the browser's native
+[WebMCP](https://webmachinelearning.github.io/webmcp/) surface, so an agent running in the
+browser can discover and call them:
+
+```ts
+import { exposeToWebmcp, isWebmcpAvailable } from '@actcore/web-runtime';
+
+const { tools } = await toolProvider.listTools([]);
+if (isWebmcpAvailable()) {
+  await exposeToWebmcp(toolProvider, tools);
+}
+```
+
+The interesting consequence: any page can become a source of **sandboxed, capability-bounded**
+tools for a browser agent — with no server to run and nothing for the user to install, and with
+the same declared ceiling a native host would enforce. WebMCP is pre-standardization, so the
+bridge is feature-gated and opt-in; `isWebmcpAvailable()` is the guard.
+
+## Related
+
+- [Transports](/docs/host/transports/) — how this compares to MCP and the CLI
+- [`@actcore/web-runtime`](https://www.npmjs.com/package/@actcore/web-runtime) on npm
+- [Python playground](/python) — the runtime driving a real component

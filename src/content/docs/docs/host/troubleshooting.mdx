@@ -1,0 +1,131 @@
+---
+title: Troubleshooting
+description: The errors you are most likely to hit, what each one actually means, and the fix.
+---
+
+Most failures with ACT are one of three things: a transport that was not chosen, a capability that
+was not granted, or a session that was not opened. The messages try to name which — this page maps
+them to fixes.
+
+## Read the audit trail first
+
+Before guessing, look at what the host reported. Every run opens with the policy each capability
+resolved to, and records each decision as it happens:
+
+```console
+audit: actpkg.dev/library/sqlite sha256:cb7715 │ act:credentials=deny wasi:filesystem=allowlist wasi:http=deny wasi:sockets=deny
+audit: ✓ allow  wasi:filesystem  write /data/app.sqlite  mode:allowlist under /data/**
+audit: ✗ deny   wasi:filesystem  read  /dev/urandom      outside ceiling  mode:allowlist
+```
+
+It goes to stderr and is on by default. The last column is the answer to "why" — see
+[the two denial reasons](#the-two-denial-reasons) below.
+
+## Transport
+
+**`Specify a transport: --mcp (stdio), or --mcp --http (MCP over HTTP)`**
+
+`act run` needs to be told how to serve. Add `--mcp` for stdio, or `--mcp --http` to listen.
+
+**`--listen requires --http (MCP stdio has no listen address)`**
+
+`--mcp` alone talks over stdin/stdout; there is nothing to bind. Add `--http`, or drop `--listen`.
+
+**`ACT-HTTP (the REST binding) was removed…`**
+
+`--http` on its own does not serve anything. It is a modifier on `--mcp`, not a transport of its
+own. See [Transports](/docs/host/transports/).
+
+**`error: unexpected argument '--fs-allow' found`**
+
+There are no per-class policy flags. Everything goes through `--grant`, `--allow` and `--deny` —
+see [Policy & sandbox](/docs/host/policy/).
+
+## Capabilities
+
+### The two denial reasons
+
+The audit line tells you which of two very different problems you have:
+
+| What it says | What it means | Fix |
+|---|---|---|
+| `outside ceiling` | The component never declared this class, so no grant can open it | Nothing you can pass. The component would have to declare it |
+| plain `deny` | Declared, but your grant did not cover this operation | Widen the grant |
+
+**`declared but not granted: wasi:filesystem`**
+
+The component asked for a class you gave it nothing for. It will fail the moment it tries. Add
+`--allow wasi:filesystem`, or a scoped `--grant`.
+
+**`declared ask, no prompt channel — every access will be denied: wasi:filesystem`**
+
+The default mode is `ask`, and this run has nowhere to ask — a pipe, a CI job, a non-TTY. `ask`
+fails safe, so everything is denied. Pass grants explicitly in any non-interactive context; this is
+the single most common CI failure.
+
+### A grant that looks right but is not enough
+
+A component often touches more than the one path you were thinking of:
+
+```console
+audit: ✗ deny  wasi:filesystem  read  /dev/urandom                 outside ceiling
+audit: ✗ deny  wasi:filesystem  write /data/app.sqlite.lock        outside ceiling
+Error: open-session failed: std:internal: PRAGMA error: access permission denied
+```
+
+SQLite writes a `.lock` sidecar next to the database and reads random bytes. Grant the
+**directory** plus `/dev/urandom`, not the single file:
+
+```bash
+--grant '{"wasi:filesystem":{"mode":"allowlist","allow":[
+    {"path":"/data/**","mode":"rw"},{"path":"/dev/urandom","mode":"ro"}]}}'
+```
+
+The generic version of this: when a tool fails with a permission error from its own library, read
+the `✗ deny` lines above it — they name the exact path that was refused.
+
+## Sessions
+
+**`std:session-not-found: Missing std:session-id metadata`**
+
+The component is stateful and no session was opened. It is not broken — it needs connection
+parameters first.
+
+```bash
+act session open-args-schema <component>     # what does it want?
+act call <component> <tool> --args '…' --session-args '{"…": "…"}'
+```
+
+For a long-lived server, `act run <component> --mcp --session-args '…'` pre-opens one and hides
+the machinery. See [Sessions](/docs/host/sessions/).
+
+## Artifacts
+
+**Every grant is refused as `outside ceiling`, on a component you just built**
+
+An unpacked `.wasm` carries no `act:component` section, so it declares no ceiling at all and
+everything is outside it. `cargo build` alone is not enough:
+
+```bash
+act-build pack target/wasm32-wasip2/release/<name>.wasm
+act inspect component-manifest <name>.wasm | jq -r .std.name   # "" or missing → still unpacked
+```
+
+**`resolving <ref> … dns error` / `client error (Connect)`**
+
+A network failure reaching the registry, not a policy denial. Retry; if it persists, check that the
+reference is right — a component pulled once is cached in `~/.cache/act/components/` and later runs
+skip the network entirely (`act store list`).
+
+## Turning the noise down
+
+The audit trail is deliberately independent of `RUST_LOG`: lowering the log level does not silence
+it, because an evidentiary log you can turn off by accident is not evidence.
+
+```bash
+act run <component> --mcp --no-audit          # the only way to disable it
+RUST_LOG=act=debug act run <component> --mcp  # more host detail, audit unaffected
+```
+
+In a test suite, redirect it to a file rather than silencing it — see
+[Testing](/docs/build/testing/).

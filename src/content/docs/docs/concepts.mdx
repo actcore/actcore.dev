@@ -1,0 +1,117 @@
+---
+title: How ACT works
+description: The model behind the protocol — what a component is, how a call crosses the sandbox boundary, and why the capability ceiling is separate from the grant.
+---
+
+Everything else in these docs is a recipe. This page is the model the recipes assume: five ideas
+that explain why the commands look the way they do.
+
+## 1. The artifact is the unit
+
+An ACT component is a single `.wasm` file, and everything a host needs to decide whether to run
+it is *inside that file*:
+
+- its **tools** — names, descriptions, JSON Schemas, usage hints, behavioural annotations;
+- its **capability declaration** — the classes of host resource it intends to touch;
+- optionally an **Agent Skill** — prose written for the model that will call it.
+
+The metadata lives in a WASM custom section (`act:component`, CBOR-encoded), which means it can
+be read **without executing the component**:
+
+```bash
+act info actpkg.dev/library/sqlite        # no instantiation, no code runs
+```
+
+That property is what makes the rest of the model possible. You can inspect, review, sign, and
+distribute a tool as one file, and decide about it before it has run a single instruction.
+
+## 2. Arguments say *what*; metadata says *where, as whom, how*
+
+Every call carries two separate things, and keeping them separate is the point.
+
+| | Carries | Example |
+|---|---|---|
+| **Arguments** | The request itself — validated against the tool's JSON Schema | `{"sql": "SELECT 1"}` |
+| **Metadata** | The context around it — namespaced key/value pairs, CBOR-encoded | `std:session-id`, `std:traceparent` |
+
+Arguments are what an agent composes from the schema. Metadata is what the *host* and the
+*operator* attach: which session this belongs to, which trace it is part of, what language to
+answer in. Keys are namespaced — `std:` is reserved by the spec, everything else belongs to
+whoever coined it (`acme:tenant`).
+
+The practical consequence: an agent that is hallucinating cannot invent context it was not given.
+It fills in arguments; it does not get to choose the session or the identity.
+
+## 3. A result is a sequence of events
+
+`call-tool` does not return a value. It returns an ordered sequence of **tool events** — content
+parts, each with its own MIME type, terminated either by running out or by an error event.
+
+It comes in two shapes, and they mean the same thing:
+
+- `immediate` — the whole list, materialised when the call returns. Natural for a tool that
+  computes an answer, and for guest languages with no async runtime.
+- `streaming` — events pushed as they are produced. Natural for a long job or an I/O-bound bridge.
+
+Hosts and intermediaries may convert freely between them, so a caller never has to care which one
+a component chose. Content is CBOR by default — deterministic CBOR, per RFC 8949 §4.2 — so binary
+payloads cross without base64 inflation.
+
+## 4. The ceiling and the grant are two different decisions
+
+This is ACT's signature idea, and it is a deliberate split between two parties who are not
+trusted the same way.
+
+**The author declares a ceiling.** In `act.toml`, a component states the classes it intends to
+use, positively — there is no `deny` in a declaration. A class that is absent is absent forever:
+no runtime flag can add it.
+
+**The operator grants, independently.** At run time you decide what you are willing to give,
+knowing nothing about the component's internals except what it declared.
+
+**The host enforces the intersection.**
+
+```
+effective = grant ∩ ceiling
+```
+
+Each half fails safe on its own. A component that asks for the whole filesystem still gets only
+what you granted. A grant of "everything" still gets only what the component declared it needs —
+so a permissive operator cannot be tricked into handing a tool more reach than its own manifest
+admits to wanting.
+
+Because the declaration is public and machine-readable, the ceiling is also a **review artifact**:
+you can read what a tool may touch before running it, and diff it when the version changes.
+
+## 5. Enforcement is interception, not cooperation
+
+The host sits on the WASI boundary. A component does not *ask permission* to open a file — it
+calls `wasi:filesystem`, and the host decides, on that call, whether the operation happens. There
+is no code path in which a misbehaving component bypasses the check, because the check *is* the
+implementation of the syscall it is trying to make.
+
+This is stronger than a container: a wasm component cannot express a syscall that was not linked
+into it. There is nothing to escape from.
+
+One boundary this does **not** cover is semantic: `DROP DATABASE` travels over a socket you
+already granted, and looks like permitted bytes on a permitted channel. That gap is what
+[consent](/docs/security/csa-framework-mapping/#runtime-consent) addresses, and — unlike capability
+enforcement — it does rest on the component cooperating by declaring the action first.
+
+## What ACT is not
+
+Worth stating plainly, because the name invites the assumption:
+
+- **Not an agent.** No loop, no planning, no memory. ACT is what an agent *calls*.
+- **Not a transport protocol.** It defines the component contract; MCP is how that contract
+  reaches the wire. The same `.wasm` also runs from the CLI and in a browser tab, with no wire at
+  all.
+- **Not stateful, by default.** The protocol passes context per call. A component that genuinely
+  must hold state — a database connection, a parsed spec — opts into `session-provider`, and the
+  host manages that lifecycle explicitly rather than pretending it does not exist.
+
+## Where to go next
+
+- [Run your first component](/docs/run-first-component/) — the model above, in three commands
+- [Policy & sandbox](/docs/host/policy/) — grants, modes, and constraint shapes
+- [WIT reference](/docs/reference/wit/) — the normative interface these ideas come from

@@ -74,7 +74,7 @@ listing tools and opening sessions, is MCP over that one path.
 ## CLI direct
 
 ```bash
-act call <component> <tool> --args '{"k":"v"}' -m std:trace-id=abc
+act call <component> <tool> --args '{"k":"v"}' -m std:traceparent=00-4bf9...-01
 ```
 
 Instantiates, runs one tool, prints the result, exits. Ideal for scripting and interactive
@@ -83,44 +83,18 @@ runs the call, and closes it in one process.
 
 ## Browser
 
-An ACT component runs client-side with no host process at all.
-[`@actcore/web-runtime`](https://www.npmjs.com/package/@actcore/web-runtime) takes the `.wasm`
-bytes and **transpiles them in the tab** using jco's in-browser transpiler — there is no build
-step, no server, and no Node involved in shipping the tool:
+A component also runs client-side, with no host process at all:
+[`@actcore/web-runtime`](https://www.npmjs.com/package/@actcore/web-runtime) transpiles the `.wasm`
+in the tab and enforces the same capability ceiling there, and can expose the component's tools to
+a browser agent over WebMCP.
 
 ```ts
 import { runComponent } from '@actcore/web-runtime';
-
-const wasm = new Uint8Array(await (await fetch('/time.wasm')).arrayBuffer());
 const { toolProvider } = await runComponent(wasm, { shimBase });
-
-const { tools } = await toolProvider.listTools([]);
-const result = await toolProvider.callTool('get_current_time', new Uint8Array([0xa0]), []);
 ```
 
-Same `tool-provider` interface, same CBOR arguments, running entirely in the page. The runtime
-enforces ACT's capability policy in the browser too — the same declared-ceiling model as the
-native host, including `ask`-mode consent prompts and an audit trail — and ships its own
-`wasi:http` and `wasi:sockets` shims. It requires [JSPI](https://github.com/WebAssembly/js-promise-integration).
-
-### WebMCP
-
-A loaded component's tools can be registered on the browser's native
-[WebMCP](https://webmachinelearning.github.io/webmcp/) surface (`document.modelContext`), so an
-agent running in the user's browser can discover and call them directly:
-
-```ts
-import { exposeToWebmcp, isWebmcpAvailable } from '@actcore/web-runtime';
-
-if (isWebmcpAvailable()) {
-  await exposeToWebmcp(toolProvider, tools);
-}
-```
-
-This turns any page into a source of sandboxed, capability-bounded tools for a browser agent —
-no server, no install. WebMCP is pre-standardization, so the bridge is feature-gated and opt-in.
-
-See it live on the [Python playground](/python).
+See [Browser runtime](/docs/host/browser/) for the full surface, and the
+[Python playground](/python) for it running live.
 
 ## Picking a transport
 

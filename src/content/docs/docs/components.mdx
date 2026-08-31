@@ -1,0 +1,73 @@
+---
+title: Published components
+description: What is available to run today, grouped by what it is for — and how to find out what any component will ask for before you run it.
+---
+
+Twenty-two components are published to **[actpkg.dev/library](https://actpkg.dev)**, signed in CI
+with keyless cosign. The registry is the source of truth for versions and digests; this page is
+about which one you want.
+
+Any of them runs the same way:
+
+```bash
+act info actpkg.dev/library/<name> --tools     # what it does, and what it will ask for
+act run  actpkg.dev/library/<name> --mcp       # serve it to an agent
+```
+
+## Before you pick one
+
+Two questions decide how much wiring a component needs, and `act info` answers both without
+running anything:
+
+- **Does it declare capabilities?** A pure component (`crypto`, `encoding`, `random`, `time`)
+  declares none and needs no grant at all. Anything touching files, the network, or sockets
+  declares a ceiling you must grant within — see [Policy & sandbox](/docs/host/policy/).
+- **Does it need a session?** Anything holding a connection or a credential does. If a call fails
+  with `std:session-not-found`, that is what happened — see [Sessions](/docs/host/sessions/).
+
+## By what it is for
+
+**Data and storage** — `sqlite`, `postgres`, `filesystem`, `archive`
+
+Query a database or work with files under a path you choose. These are the components where the
+grant matters most: scope it to the directory the data lives in, not to `/`.
+
+**Network** — `http-client`, `search-brave`, `search-searxng`
+
+Fetch a URL, or search the web. The declared `wasi:http` ceiling limits which hosts a component can
+reach at all, so a search component cannot quietly become a general-purpose fetcher.
+
+**Documents** — `anydoc`, `pdf-inspector`
+
+Extract text and structure out of formats an agent cannot read directly.
+
+**Compute** — `python-env`, `python-eval`, `sed`
+
+Run code in a sandbox. `python-env` is the substantial one: a stateful Python environment with
+numpy and pandas built in and runtime `pip install`. `python-eval` is the narrow, pure-Python
+sandbox. Try `python-env` in a browser tab on the [playground](/python).
+
+**Browser and desktop** — `webdriver-bidi`, `vnc-desktop`
+
+Drive a real browser or a remote desktop from an agent.
+
+**Bridges** — `mcp-bridge`, `openapi-bridge`
+
+Adapt something that already exists into a component: an upstream MCP server, or an OpenAPI
+service. These are stateful — the parsed spec or the upstream handshake lives in a session.
+
+**Utilities** — `crypto`, `encoding`, `random`, `time`, `openwallet`
+
+Small, mostly pure. Useful on their own and useful as worked examples: they are the simplest
+components to read if you are about to write one.
+
+## Writing your own
+
+Everything above is built with the same toolchain you would use:
+
+```bash
+act-build init rust my-component
+```
+
+See the [Rust](/docs/build/rust/) or [Python](/docs/build/python/) quick start — or
+[Language support](/docs/build/languages/) if you would rather use one of the other ten.

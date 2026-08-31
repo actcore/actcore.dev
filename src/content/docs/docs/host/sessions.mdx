@@ -1,0 +1,119 @@
+---
+title: Sessions
+description: How a component that must hold state — a database connection, a parsed spec, a credential — gets a lifecycle the host manages explicitly.
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+The protocol is stateless: context travels with each call. That is right for most tools — `crypto`,
+`encoding`, `time` have nothing to remember between calls, and a stateless component scales
+horizontally without any coordination.
+
+Some tools genuinely cannot work that way. A database connection, a 5 MB parsed OpenAPI spec, an
+upstream MCP handshake, a browser instance, an authenticated API client — re-establishing those on
+every call is either wasteful or impossible. Those components opt into
+**`act:sessions/session-provider`**, and the host manages the lifetime explicitly rather than
+pretending it does not exist.
+
+## The interface
+
+Three functions, and a component that exports them is asking for a lifecycle:
+
+```wit
+get-open-session-args-schema: async func(metadata) -> result<string, error>;
+open-session:                 async func(args, metadata) -> result<session, error>;
+close-session:                func(session-id);
+```
+
+`open-session` returns a `session` whose `id` is opaque to the caller. Every later call that
+should land in that session carries the id as **`std:session-id`** metadata. `close-session` is
+deliberately synchronous and swallows errors — tearing down should not be able to fail in a way
+that blocks shutdown.
+
+A component with no external state **should not** export `session-provider`. Exporting it commits
+the host to a lifecycle for no benefit.
+
+## Finding out what a session wants
+
+The component publishes the shape of its own `open-session` args, so you never have to guess:
+
+```bash
+act session open-args-schema actpkg.dev/library/sqlite
+```
+
+```json
+{
+  "title": "OpenArgs",
+  "description": "open-session args: which database file this session connects to.",
+  "type": "object",
+  "properties": {
+    "database_path": { "type": "string", "description": "Path to the SQLite database file." }
+  },
+  "required": ["database_path"]
+}
+```
+
+## Three ways to drive one
+
+<Tabs syncKey="session-style">
+<TabItem label="One call">
+```bash
+act call actpkg.dev/library/sqlite query \
+  --args '{"sql": "SELECT sqlite_version()"}' \
+  --session-args '{"database_path": "/tmp/actdemo/app.sqlite"}' \
+  --grant '{"wasi:filesystem":{"mode":"allowlist","allow":[
+      {"path":"/tmp/actdemo/**","mode":"rw"},{"path":"/dev/urandom","mode":"ro"}]}}'
+```
+The host opens a session, injects its id for the call, and closes it before exiting. Good for
+scripts and for trying a component out.
+</TabItem>
+<TabItem label="Session-of-1">
+```bash
+act run actpkg.dev/library/sqlite --mcp \
+  --session-args '{"database_path": "/tmp/actdemo/app.sqlite"}'
+```
+The host pre-opens **one** session at startup and serves the component as if sessions did not
+exist: no virtual tools appear, and a client-supplied `std:session-id` is ignored. This is the
+usual shape for a component wired into an agent — the operator configures the connection once,
+and the agent just sees tools.
+</TabItem>
+<TabItem label="Agent-driven">
+```bash
+act run actpkg.dev/library/mcp-bridge --mcp
+```
+With no `--session-args`, the host synthesises two extra MCP tools — `open_session` and
+`close_session` — from the component's schema. The agent opens sessions itself and passes the id
+back. Use this when the agent legitimately needs several sessions, or when it must choose the
+connection.
+</TabItem>
+</Tabs>
+
+## Lifecycle guarantees
+
+- The host closes every session it opened before tearing the instance down, so a component can put
+  cleanup in `close-session` and rely on it.
+- A component that never returns from `open-session` no longer hangs the host: the wait is bounded
+  and reports what happened, rather than leaving a process that never binds its listener.
+- Calling a tool with an unknown or missing session id fails with `std:session-not-found` before
+  the component is reached:
+
+```console
+Error: std:session-not-found: Missing std:session-id metadata
+```
+
+That error is the usual first surprise with a stateful component — it means the tool needs a
+session and none was supplied, not that anything is broken.
+
+## Sessions are also the auth boundary
+
+Credentials arrive in `open-session` args, not in per-call metadata. The component validates them
+once, keeps them associated with the session, and the agent only ever handles the opaque id
+afterwards. Session args are also the one thing the audit trail never records.
+
+See [Credentials](/docs/host/credentials/) for how the values get there without being typed into a
+config file.
+
+## Related
+
+- [`act session`](/docs/reference/cli/#act-session) — the CLI surface
+- [ACT-SESSIONS](https://github.com/actcore/act-spec/blob/main/spec/ACT-SESSIONS.md) — the normative spec

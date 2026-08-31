@@ -71,8 +71,10 @@ export default defineConfig({
                 label: 'Start here',
                 items: [
                     { slug: 'docs', label: 'What is ACT' },
+                    { slug: 'docs/concepts' },
                     { slug: 'docs/install' },
                     { slug: 'docs/run-first-component' },
+                    { slug: 'docs/components' },
                 ],
             },
             {
@@ -91,7 +93,11 @@ export default defineConfig({
                 items: [
                     { slug: 'docs/host/transports' },
                     { slug: 'docs/host/policy' },
+                    { slug: 'docs/host/sessions' },
+                    { slug: 'docs/host/credentials' },
+                    { slug: 'docs/host/browser' },
                     { slug: 'docs/host/config' },
+                    { slug: 'docs/host/troubleshooting' },
                 ],
             },
             {
