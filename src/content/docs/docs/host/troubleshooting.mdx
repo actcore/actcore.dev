@@ -84,6 +84,23 @@ SQLite writes a `.lock` sidecar next to the database and reads random bytes. Gra
 The generic version of this: when a tool fails with a permission error from its own library, read
 the `✗ deny` lines above it — they name the exact path that was refused.
 
+## Arguments
+
+**`std:invalid-args: arguments do not match the schema for '<tool>'`**
+
+The host validates arguments against the component's own declared schema before the component sees
+them, so this is a rejection, not a component failure. The message names the path and the
+mismatch:
+
+```console
+Error: std:invalid-args: arguments do not match the schema for 'query':
+- at '/sql': want string, but got number
+```
+
+Check the schema you are coding against with `act info <component> --tools`. If you are the
+component author and the call *should* have been accepted, the schema and the implementation have
+drifted — fix the schema, not the caller.
+
 ## Sessions
 
 **`std:session-not-found: Missing std:session-id metadata`**

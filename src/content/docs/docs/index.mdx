@@ -34,7 +34,7 @@ graph TD
     Component -.-> Browser
 ```
 
-Every component exports the `tool-provider` interface from [`act:tools@0.2.0`](https://github.com/actcore/act-spec/blob/main/wit/act-tools/act-tools.wit). Stateful components additionally export [`act:sessions@0.2.0`](https://github.com/actcore/act-spec/blob/main/wit/act-sessions/act-sessions.wit) — used by the bridges (mcp-bridge, openapi-bridge, act-http-bridge) and any component with a session lifecycle. Both depend on [`act:core@0.4.0`](https://github.com/actcore/act-spec/blob/main/wit/act-core/act-core.wit) for cross-cutting types. The host reads each component's metadata from a WASM custom section (`act:component`, CBOR) without instantiating it, then exposes the tools over MCP — on stdio or over HTTP.
+Every component exports the `tool-provider` interface from [`act:tools@0.2.0`](https://github.com/actcore/act-spec/blob/main/wit/act-tools/act-tools.wit). Stateful components additionally export [`act:sessions@0.2.0`](https://github.com/actcore/act-spec/blob/main/wit/act-sessions/act-sessions.wit) — used by the bridges (`mcp-bridge`, `openapi-bridge`) and any component with a session lifecycle. Both depend on [`act:core@0.4.0`](https://github.com/actcore/act-spec/blob/main/wit/act-core/act-core.wit) for cross-cutting types. The host reads each component's metadata from a WASM custom section (`act:component`, CBOR) without instantiating it, then exposes the tools over MCP — on stdio or over HTTP.
 
 ## What's in the box
 

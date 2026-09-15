@@ -34,7 +34,9 @@ Every call carries two separate things, and keeping them separate is the point.
 | **Arguments** | The request itself — validated against the tool's JSON Schema | `{"sql": "SELECT 1"}` |
 | **Metadata** | The context around it — namespaced key/value pairs, CBOR-encoded | `std:session-id`, `std:traceparent` |
 
-Arguments are what an agent composes from the schema. Metadata is what the *host* and the
+Arguments are checked against the tool's schema by the **host**, before the component is reached —
+an agent composing them from a schema is guessing, and a component's tool body should start from
+arguments that match its own declaration. Metadata is what the *host* and the
 *operator* attach: which session this belongs to, which trace it is part of, what language to
 answer in. Keys are namespaced — `std:` is reserved by the spec, everything else belongs to
 whoever coined it (`acme:tenant`).

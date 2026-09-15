@@ -19,6 +19,7 @@ Commands:
   inspect  Inspect a component artifact (read-only, no instantiation)
   secret   Manage stored credentials. There is no `get`: a value is never printed
   login    Provision a credential a component declares it expects, by prompting
+  completions  Print a shell completion script on stdout
 ```
 
 All subcommands that take a component accept three reference forms: a local path, an HTTP(S) URL, or an OCI registry ref (e.g. `actpkg.dev/library/sqlite:latest`). Remote components are cached in `~/.cache/act/components/`.
@@ -177,6 +178,18 @@ Provisions a credential the component *declares* it expects — its `[[std.crede
 by prompting for each field. Omit `--key` when the component declares exactly one. There is no
 non-interactive form; use `act secret set` for that. An existing credential is reported and left
 alone unless you pass `--force`.
+
+### `act completions`
+
+```bash
+act completions bash > /etc/bash_completion.d/act
+act completions zsh  > "${fpath[1]}/_act"
+act completions fish > ~/.config/fish/completions/act.fish
+```
+
+Writes to stdout rather than installing anything — where a completion script belongs is the
+shell's and the package manager's business. The script is generated from the same definition the
+binary parses with, so it cannot drift from the flags that actually exist.
 
 ## `act-build`
 

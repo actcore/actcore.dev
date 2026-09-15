@@ -104,10 +104,33 @@ variables: `act secret set` writes one, `act login` prompts for whatever a compo
 its `[[std.credentials]]` entries, and neither command will print a stored value back — there is
 deliberately no `act secret get`. See [the auth design rationale](https://github.com/actcore/act-spec/blob/main/spec/ACT-AUTH.md).
 
-:::note[Schema validation happens in the guest]
-The schema is a contract the component publishes, not a gate the host enforces: `act` ships no
-JSON Schema validator, and argument validation is done by the component (the SDKs do it). Do not
-model the host as sanitising arguments on a component's behalf.
+### Input validation
+
+| | |
+|---|---|
+| Status | Shipped, with one documented gap |
+| ACT capability | Host-side JSON Schema validation of tool arguments and session args, before the guest |
+
+Arguments reaching a component are composed by a language model reading a schema, which makes them
+untrusted input in the ordinary sense. The host validates them against the component's own
+declared `parameters-schema` — and session args against `get-open-session-args-schema` — before
+the component is reached. A mismatch is refused, and the component never sees the call:
+
+```console
+Error: std:invalid-args: arguments do not match the schema for 'query':
+- at '/sql': want string, but got number
+```
+
+A guest-authored schema's `$ref` is **never fetched**: the validator resolves only registered
+resources and none are registered, so a schema cannot become an outbound request the component
+never declared `wasi:http` for.
+
+:::caution[Validation is best-effort per tool]
+A schema that fails to compile disables checking **for that tool**, with a warning, rather than
+failing every call to it. The reasoning is that the protection exists for the component's benefit,
+so a component shipping an unusable schema has opted out of it — but it means the presence of
+validation is not guaranteed for every tool, and the SDKs validating on their own side is what
+makes that acceptable. Do not model host validation as a universal gate.
 :::
 
 ### Observability & logging

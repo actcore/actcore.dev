@@ -40,6 +40,10 @@ uv tool install act-build
 ```
 Platform wheels for macOS (x86_64, arm64) and Linux (x86_64, aarch64, riscv64; glibc and musl).
 No Python is involved at run time — the wheel is just a delivery vehicle for the binary.
+
+The glibc wheels require **glibc 2.34 or newer** (Debian 12, Ubuntu 22.04, RHEL 9); the riscv64
+wheel requires 2.39. On an older distribution, install the musl build — or use npm, whose packages
+ship musl binaries and carry no floor.
 </TabItem>
 <TabItem label="cargo">
 ```bash
