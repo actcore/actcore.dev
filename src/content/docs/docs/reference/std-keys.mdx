@@ -1,60 +1,159 @@
 ---
 title: std:* metadata keys
-description: Canonical registry of well-known metadata keys consumed by the host and transport adapters.
+description: The well-known keys the host and transport adapters consume — where each one may appear, and what it means.
 ---
 
-Metadata keys are namespaced strings. Keys starting with `std:` are reserved for the protocol and canonicalized in [ACT-CONSTANTS](https://github.com/actcore/act-spec/blob/main/spec/ACT-CONSTANTS.md). Third-party keys use their own namespace (e.g. `acme:priority`).
+Metadata keys are namespaced strings. `std:` is reserved by the protocol and registered in
+[ACT-CONSTANTS](https://github.com/actcore/act-spec/blob/main/spec/ACT-CONSTANTS.md), which is the
+normative list; anything else belongs to whoever coined it (`acme:priority`, `pg:sslcert`).
 
-## Tool-level (on `tool-definition.metadata`)
+Values are CBOR-encoded. Where a key appears matters — the same name can mean different things in
+two positions, and §7 and §8 of the registry contain a deliberate example of exactly that.
+
+## Component metadata
+
+Lives under `[std]` in the manifest, and ends up in the `act:component` custom section. See
+[Manifest reference](/docs/build/manifest/).
 
 | Key | Type | Purpose |
 |---|---|---|
-| `std:read-only` | bool | Tool does not mutate external state. Drives MCP `readOnlyHint`. |
-| `std:idempotent` | bool | Repeated calls with the same args produce the same effect. Drives MCP `idempotentHint`. |
-| `std:destructive` | bool | Tool has irreversible effects. Drives MCP `destructiveHint`. |
-| `std:usage-hints` | list\<string\> | Short agent-facing usage guidance. |
-| `std:anti-usage-hints` | list\<string\> | When **not** to use the tool. |
-| `std:examples` | list\<string\> | Example invocations for agent context. |
-| `std:tags` | list\<string\> | Free-form classifier. |
-| `std:timeout-ms` | u64 | Suggested max duration; host may enforce. |
+| `name` | string | Component name. **Required** |
+| `version` | string | SemVer. **Required** |
+| `description` | string or localized map | Human-readable description |
+| `default-language` | string | BCP 47 tag, used when a `localized-string::plain` carries no language |
+| `capabilities` | map | Capability declarations, keyed by capability id |
 
-## Component-level (on `act:component` custom section)
+## Tool definition
 
-Live under `[std]` in the manifest. See [Manifest reference](/docs/build/manifest/).
+On `tool-definition.metadata` — what a component says about each of its tools.
 
-| Key | Purpose |
-|---|---|
-| `std.name` | Component name |
-| `std.version` | Semver |
-| `std.description` | One-line description |
-| `std.default-language` | BCP 47 language tag, used when a `localized-string::plain` has no explicit language. |
-| `std.capabilities."wasi:filesystem"` | Filesystem capability declaration (see [Policy & sandbox](/docs/host/policy/)) |
-| `std.capabilities."wasi:http"` | HTTP capability declaration |
-| `std.session-mode` | `explicit \| singleton \| none` — pattern hint for stateful components. |
-| `std.fs.mount-root` | Preferred guest mount point for filesystem-declaring components. |
+| Key | Type | Purpose |
+|---|---|---|
+| `std:read-only` | bool | Does not modify state. Drives MCP `readOnlyHint` |
+| `std:idempotent` | bool | Same arguments, same effect. Drives MCP `idempotentHint` |
+| `std:destructive` | bool | May irreversibly modify state. Drives MCP `destructiveHint` |
+| `std:timeout-ms` | uint | Suggested timeout; the host may override |
+| `std:usage-hints` | localized-string | When to use this tool, for an agent |
+| `std:anti-usage-hints` | localized-string | When **not** to use it |
+| `std:examples` | array of bstr | Example calls, as CBOR-encoded argument maps |
+| `std:tags` | array of string | Categorisation |
+| `std:session-op` | string | `"open"` / `"close"` — marks a tool synthesised by a transport adapter as a session lifecycle operation |
 
-## Call-level (on `tool-call.metadata`)
+### Reserved tool names
 
-Passed per-invocation by the host.
+`open_session` and `close_session` are synthesised by the MCP adapter for components exporting
+`session-provider`, so a component must not define tools with those names. On a collision the host
+suffixes its own (`open_session__act`) and warns.
 
-| Key | Purpose |
-|---|---|
-| `std:session-id` | Opaque session token for stateful components. |
-| `std:trace-id` | Distributed trace ID (W3C traceparent). |
-| `std:parent-call-id` | Correlates nested tool calls. |
-| `std:agent-id` | Identity of the calling agent. |
-| `std:conversation-id` | Identity of the calling conversation. |
+## Cross-cutting
 
-## Tool-error kinds (on `tool-error.kind`)
+May appear on any metadata field — a tool call, a `list-tools` response, a content part, an
+`open-session`.
+
+| Key | Type | Purpose |
+|---|---|---|
+| `std:session-id` | string | Session issued by `session-provider`. See [Sessions](/docs/host/sessions/) |
+| `std:traceparent` | string | W3C Trace Context `traceparent` |
+| `std:tracestate` | string | W3C Trace Context `tracestate` |
+| `std:request-id` | string | Correlation id for logging |
+| `std:progress-token` | string | MCP-compatible progress token |
+| `std:agent-id` | string | Identifies the calling agent; informational, format implementation-defined |
+
+Transport adapters propagate `std:traceparent` and `std:tracestate` to and from the corresponding
+HTTP headers or MCP request extensions.
+
+`std:on-behalf-of` is **reserved for future use** — usable with application-defined semantics, but
+not yet something to rely on across implementations.
+
+## Content parts
+
+On `content-part.metadata`, for reporting progress from inside a streaming result.
+
+| Key | Type | Purpose |
+|---|---|---|
+| `std:progress` | uint | Units completed so far |
+| `std:progress-total` | uint | Total units, if known |
+
+## Authentication
+
+Keys a component accepts in **`open-session.args`** — not in per-call metadata, which is
+discouraged for new designs because a credential repeated per call is a credential in the agent's
+context per call. See [Credentials](/docs/host/credentials/).
+
+| Key | Type | Purpose |
+|---|---|---|
+| `std:api-key` | string | API key for the external service |
+| `std:bearer-token` | string | OAuth2/OIDC access token, or a generic bearer token |
+| `std:username` | string | Basic auth |
+| `std:password` | string | Basic auth |
+
+:::caution[Same spelling, different things]
+`std:username` and `std:password` are registered here as *session-argument keys*, which the agent
+can see. The credential **store** registers field *types*, not field names — so inside stored
+material these names mean nothing, and a stored credential's fields are named by whoever stored
+them. Do not read a match between the two as a relationship.
+:::
+
+## Bridges
+
+| Key | Type | Purpose |
+|---|---|---|
+| `std:forward` | object | Opaque metadata blob passed to the next component in a chain; each bridge level unwraps one layer |
+
+## Error kinds
+
+On `error.kind`. See [Troubleshooting](/docs/host/troubleshooting/) for what to do about each.
 
 | Kind | Meaning |
 |---|---|
-| `std:not-found` | Unknown tool, resource, or endpoint |
-| `std:invalid-args` | Schema violation or invalid input |
-| `std:timeout` | Exceeded `std:timeout-ms` or host timeout |
-| `std:capability-denied` | Host policy rejected an operation |
-| `std:internal` | Unexpected component failure (equivalent to panic) |
+| `std:not-found` | The named tool does not exist |
+| `std:invalid-args` | Arguments or metadata failed schema validation |
+| `std:timeout` | Exceeded the declared or host-configured timeout |
+| `std:capability-denied` | The component used a capability that was not granted |
+| `std:session-not-found` | A call referenced a session id the component does not recognise |
+| `std:credential-required` | A credential the component needs is absent from its profile. The host surfaces it with a command the user can run to provision it — neither the error nor the command describes the material |
+| `std:internal` | An unrecoverable error inside the component |
+
+## Capability identifiers
+
+Keys of the `std.capabilities` map. See [Policy & sandbox](/docs/host/policy/) for the constraint
+shapes each one accepts.
+
+| Id | Parameters | Purpose |
+|---|---|---|
+| `wasi:http` | — | Outbound HTTP |
+| `wasi:filesystem` | `mount-root`, `mounts` | Filesystem access, plus the guest-path topology |
+| `wasi:sockets` | — | Outbound TCP and UDP |
+| `act:credentials` | — | The host credential store. A bare table; undeclared means denied |
+
+Third-party capabilities use their own namespace (`acme:gpu/compute`).
+
+### Semantic classes
+
+The ids above name resources the host mediates by **interception**. A semantic class names an
+*action* the host cannot see, because it travels over a channel the operator already permitted —
+`db:drop`, `browser:navigate`. They are declared like any other class and surfaced through
+`act:consent`.
+
+They are **component-defined**: there is no registry of well-known ones, and none is reserved. Two
+components in different domains may pick the same identifier and neither is authoritative. Three
+rules hold regardless:
+
+- A class absent from the declaration is denied, and no grant widens it.
+- A declaration must name a **concrete** class. `"db:*"` is not a valid declaration — a reader
+  could not tell what the artifact can ask for.
+- A class should separate irreversible actions from routine ones — `db:drop` apart from `db:ddl` —
+  so the destructive case can be refused without refusing the rest.
+
+```toml
+[std.capabilities."db:drop"]
+description = "Destructive operations (DROP, TRUNCATE)."
+
+[[std.capabilities."db:drop".allow]]
+key = "test_*"
+```
 
 ---
 
-The full canonical list is maintained in [ACT-CONSTANTS](https://github.com/actcore/act-spec/blob/main/spec/ACT-CONSTANTS.md). New keys land there first; this page is a secondary index.
+[ACT-CONSTANTS](https://github.com/actcore/act-spec/blob/main/spec/ACT-CONSTANTS.md) is normative
+and gets new keys first; this page is an index onto it.

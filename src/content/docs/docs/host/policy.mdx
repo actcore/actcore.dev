@@ -47,7 +47,7 @@ Three flags, uniform across `run`, `call`, and `info`:
 act run <component> --mcp --allow wasi:http
 
 # Refuse a class outright — including a semantic class the component declares
-act run <component> --mcp --deny db:drop-database
+act run <component> --mcp --deny db:drop
 
 # Full control: a JSON grant, repeatable and merged
 act run <component> --mcp --grant '{
@@ -110,10 +110,16 @@ The host-provided credential store. See `act secret` and `act login` for putting
 
 ### Semantic classes
 
-A component may declare classes of its own — `db:drop-database`, `mail:send`, whatever it wants
-to be held to — and enforce them internally. They're granted and denied exactly like the built-in
-ids, which is what makes `--deny db:drop-database` work. Ids also match by `*`-prefix in the
-config file (`"db:*"`).
+A component may declare classes of its own — `db:drop`, `browser:navigate`, whatever it wants to
+be held to — and enforce them internally. They're granted and denied exactly like the built-in ids,
+which is what makes `--deny db:drop` work.
+
+Two rules come from the spec rather than from taste. A **declaration** must name a concrete class:
+`"db:*"` is not valid in `act.toml`, because a reader could not tell what the artifact is able to
+ask for. And a class should separate irreversible actions from routine ones — `db:drop` apart from
+`db:ddl` — so the destructive case can be refused without refusing the rest. A `*`-suffix pattern
+is fine on the **granting** side, in the config file (`"db:*" = "deny"`), where it narrows rather
+than hides.
 
 ## Layering
 

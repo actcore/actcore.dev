@@ -89,7 +89,7 @@ minimal internal ABI with a Rust layer handling the canonical interface;
 | Language | Blocker |
 |---|---|
 | **MoonBit** | The generated glue writes UTF-16 code-unit counts into the canonical ABI's *byte*-length field, so every WIT `string` is mangled — a tool's own name doesn't survive `list-tools`. Builds and loads; not usable. No workaround. |
-| **JavaScript** | `componentize-js` cannot yet emit a `stream<>`-bearing export, which `tool-result` requires. Tracked [upstream](https://github.com/bytecodealliance/ComponentizeJS/issues/335). JS *consumes* ACT components fine in the browser — see [Transports](/docs/host/transports/#browser). |
+| **JavaScript** | `componentize-js` cannot yet emit a `stream<>`-bearing export, which `tool-result` requires: its splicer panics with `not yet implemented` on the ACT world. Tracked [upstream](https://github.com/bytecodealliance/ComponentizeJS/issues/335). `act-build init js` exists but produces a scaffold that cannot currently be built — do not start on it. JS *consumes* ACT components fine in the browser: see [Browser runtime](/docs/host/browser/). |
 | **Mojo** | Its 1.0 LLVM build ships no wasm target at all; blocked at code generation, not at bindings. |
 
 ## Why this matters for the security model

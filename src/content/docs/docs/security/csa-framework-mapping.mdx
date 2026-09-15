@@ -207,11 +207,11 @@ travels over a socket the operator already granted; a prompt injection reaches a
 already-granted HTTP session. The host sees permitted bytes on a permitted channel.
 [`act:consent@0.1.0`](https://github.com/actcore/act-spec/blob/main/spec/ACT-CONSENT.md) closes it
 by inverting the initiative: the component names the *class* of action it is about to take
-(`db:drop-database`), and the host applies that class's policy — the same grants, modes, and audit
+(`db:drop`), and the host applies that class's policy — the same grants, modes, and audit
 trail as any physical class. It is normatively specified and, like `act:credentials`, is a host
 import a component opts into. **The host does not implement it yet**; today a component that wants
 this enforces its declared semantic classes itself, and operators gate them with
-`--deny db:drop-database`.
+`--deny db:drop`.
 
 ### Payments / wallet security
 
