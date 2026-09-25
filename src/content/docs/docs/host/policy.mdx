@@ -59,6 +59,42 @@ act run <component> --mcp --grant '{
 A grant's value is either the string `"open"` or an object with `mode`, `allow`, and `deny`.
 `allow` and `deny` hold **provider-defined constraints** — the shapes differ per capability.
 
+### Shorthand: one rule per flag
+
+For the common case — one directory, one host — `--allow` and `--deny` take a rule after `=`.
+Each shorthand is exactly one `--grant` rule, parsed by the capability's provider, so it means
+nothing a JSON grant couldn't say:
+
+```bash
+act run actpkg.dev/library/sqlite --mcp --allow 'fs=/data/**'        # read-write
+act run <component> --mcp --allow 'fs=~/notes/**:ro'                  # read-only
+act run <component> --mcp --allow 'http=https://api.example.com'      # one host + scheme
+act run <component> --mcp --allow 'sockets=db.local:5432/tcp'         # host, port, protocol
+act run <component> --mcp --allow 'db:drop=test_*'                    # semantic class, by key
+act run <component> --mcp --allow 'fs=/data/**' --deny 'fs=/data/secret/**'
+```
+
+| Class | Alias | Shorthand |
+|---|---|---|
+| `wasi:filesystem` | `fs` | `<glob>[:ro\|:rw]` — read-write unless `:ro` |
+| `wasi:http` | `http` | `[scheme://]host[:port]` |
+| `wasi:sockets` | `sockets` | `host[:port][/tcp\|/udp]`, or a CIDR |
+| `act:credentials` | `creds` | none — `--allow creds` |
+| any semantic class | — | `<key-glob>` |
+
+- Aliases work wherever an id does: in flags, in `--grant` keys and in `[policy]`. The audit
+  trail always prints the full id.
+- A rule never goes past the component's ceiling: `fs=/data/**` on a component that declared
+  `/data/**` read-only is read-only.
+- IPv6 goes in brackets — `http=[::1]:8080` — because `fe80::1:8080` is itself a valid address.
+- `http=` takes hosts, not CIDR ranges: an http allow rule without a host never survives the
+  intersection with the component's declared hosts, so a range would grant nothing.
+- A constrained `--deny` narrows whatever the profile and config granted and never grants.
+- `--allow fs` and `--allow 'fs=…'` for the same class together is an error: the first opens the
+  whole ceiling, the second only one rule.
+
+`act run --help` lists every built-in class with its alias and shorthand.
+
 ## Capability ids and their constraints
 
 Grants are keyed by capability id. The built-in classes:
@@ -76,8 +112,8 @@ directory.
 **Ancestor traversal.** WASI stats every intermediate directory when opening a nested file, so an
 entry for `/tmp/work/db.sqlite` implicitly permits traversing `/tmp/work` and `/tmp` — sibling
 files stay denied. You don't list each parent. But do watch the sidecars: SQLite, for example,
-also writes a `.lock` file next to the database and reads `/dev/urandom`, so grant the directory
-rather than the single file.
+also writes a `.lock` file next to the database, so grant the directory rather than the single
+file.
 
 ### `wasi:http`
 
@@ -88,7 +124,9 @@ rather than the single file.
 
 `host` is exact or a `*.suffix` wildcard; `scheme`, `methods`, `ports` narrow further and are
 optional. A rule may instead match by `cidr` (IPv4 or IPv6), with `except-ports` carving ports
-back out — useful for deny rules like "block loopback except port 3000".
+back out — useful for deny rules like "block loopback except port 3000". Use `cidr` in `deny`:
+an `allow` rule with no `host` is dropped when it is intersected with the component's declared
+hosts.
 
 Requests are checked on five axes — host, scheme, method, port, and **DNS-resolved IP**. A
 CIDR-denied destination surfaces to the component as a DNS error rather than a refused
@@ -159,8 +197,8 @@ act run <component> --mcp --grant '{"*":"deny"}'
 
 ```bash
 act run actpkg.dev/library/sqlite --mcp \
-  --grant '{"wasi:filesystem":{"mode":"allowlist","allow":[
-      {"path":"/data/**","mode":"rw"},{"path":"/dev/urandom","mode":"ro"}]}}'
+  --session-args '{"database_path":"/data/app.db"}' \
+  --allow 'fs=/data/**'
 ```
 
 ### One external API, nothing else — and no metadata service

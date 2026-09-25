@@ -25,9 +25,7 @@ mkdir -p /tmp/actdemo
 act call actpkg.dev/library/sqlite query \
   --args '{"sql": "SELECT sqlite_version()"}' \
   --session-args '{"database_path": "/tmp/actdemo/app.sqlite"}' \
-  --grant '{"wasi:filesystem":{"mode":"allowlist","allow":[
-      {"path":"/tmp/actdemo/**","mode":"rw"},
-      {"path":"/dev/urandom","mode":"ro"}]}}'
+  --allow 'fs=/tmp/actdemo/**'
 ```
 
 ```json
@@ -46,10 +44,11 @@ Two things in that command are worth unpacking:
   so it exports `session-provider` and takes its connection parameters at session open rather
   than per call. On `act call`, this flag opens a session-of-1, runs the call, and closes it.
   Ask any component what it accepts with `act session open-args-schema <component>`.
-- **`--grant`** — the component declares a `wasi:filesystem` capability, and nothing reaches the
-  filesystem until you grant it. Note the grant covers the whole directory and `/dev/urandom`,
-  not just the database file: SQLite also writes a `.lock` sidecar and reads random bytes. Grant
-  too little and the audit trail tells you exactly what was refused.
+- **`--allow 'fs=…'`** — the component declares a `wasi:filesystem` capability, and nothing
+  reaches the filesystem until you grant it. `fs=/tmp/actdemo/**` grants that directory
+  read-write and nothing else; `:ro` would make it read-only. Note it covers the whole directory,
+  not just the database file: SQLite also writes a `.lock` sidecar next to it. Grant too little
+  and the audit trail tells you exactly what was refused — and which flag would grant it.
 
 ## Serve it to an agent
 
@@ -58,9 +57,7 @@ Two things in that command are worth unpacking:
 ```bash
 act run actpkg.dev/library/sqlite --mcp \
   --session-args '{"database_path": "/tmp/actdemo/app.sqlite"}' \
-  --grant '{"wasi:filesystem":{"mode":"allowlist","allow":[
-      {"path":"/tmp/actdemo/**","mode":"rw"},
-      {"path":"/dev/urandom","mode":"ro"}]}}'
+  --allow 'fs=/tmp/actdemo/**'
 ```
 Exposes the component over MCP stdio. Plug into Claude Code, Claude Desktop, Cursor, or any MCP
 client. With `--session-args` the host pre-opens one session and hides the session machinery
@@ -70,9 +67,7 @@ from the client entirely.
 ```bash
 act run actpkg.dev/library/sqlite --mcp --http -l "[::1]:3000" \
   --session-args '{"database_path": "/tmp/actdemo/app.sqlite"}' \
-  --grant '{"wasi:filesystem":{"mode":"allowlist","allow":[
-      {"path":"/tmp/actdemo/**","mode":"rw"},
-      {"path":"/dev/urandom","mode":"ro"}]}}'
+  --allow 'fs=/tmp/actdemo/**'
 ```
 The same MCP server on an HTTP listener, at `/mcp`. Use it for a remote or containerised agent.
 See [Transports](/docs/host/transports/).
@@ -92,22 +87,22 @@ Rather than typing that command, put it in your MCP client's config. In Claude C
       "args": [
         "@actcore/act", "run", "actpkg.dev/library/sqlite", "--mcp",
         "--session-args", "{\"database_path\": \"/tmp/actdemo/app.sqlite\"}",
-        "--grant", "{\"wasi:filesystem\":{\"mode\":\"allowlist\",\"allow\":[{\"path\":\"/tmp/actdemo/**\",\"mode\":\"rw\"},{\"path\":\"/dev/urandom\",\"mode\":\"ro\"}]}}"
+        "--allow", "fs=/tmp/actdemo/**"
       ]
     }
   }
 }
 ```
 
-Each flag is its own array element, and the JSON values passed to `--grant` and `--session-args`
-are strings, so their quotes are escaped. If you have `act` on `$PATH`, use `"command": "act"`
+Each flag is its own array element, and the JSON value passed to `--session-args` is a string,
+so its quotes are escaped. If you have `act` on `$PATH`, use `"command": "act"`
 and drop the leading `"@actcore/act"` argument.
 
 The equivalent one-liner, if you would rather not edit the file by hand:
 
 ```bash
 claude mcp add sqlite -- npx @actcore/act run actpkg.dev/library/sqlite --mcp \
-  --grant '{"wasi:filesystem":{"mode":"allowlist","allow":[{"path":"/tmp/actdemo/**","mode":"rw"},{"path":"/dev/urandom","mode":"ro"}]}}'
+  --allow 'fs=/tmp/actdemo/**'
 ```
 
 For a component you serve over HTTP instead, point the client at the endpoint:
@@ -146,7 +141,7 @@ grant more than the component asked for, and the component can't reach past what
 
 The default policy mode is `ask`, so an interactive run prompts you on first access instead of
 requiring the flag up front. A headless run with no prompt channel degrades to deny — which is
-why scripted invocations like the ones above pass `--grant` explicitly. See
+why scripted invocations like the ones above pass `--allow` explicitly. See
 [Policy & sandbox](/docs/host/policy/).
 
 ## Next
