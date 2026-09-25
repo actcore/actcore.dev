@@ -87,8 +87,13 @@ act run <component> --mcp --allow 'fs=/data/**' --deny 'fs=/data/secret/**'
 - A rule never goes past the component's ceiling: `fs=/data/**` on a component that declared
   `/data/**` read-only is read-only.
 - IPv6 goes in brackets — `http=[::1]:8080` — because `fe80::1:8080` is itself a valid address.
-- `http=` takes hosts, not CIDR ranges: an http allow rule without a host never survives the
-  intersection with the component's declared hosts, so a range would grant nothing.
+- `--allow 'http=…'` takes hosts, not CIDR ranges: an http allow rule without a host never
+  survives the intersection with the component's declared hosts, so a range would grant
+  nothing. A range can be denied — `--deny 'http=169.254.0.0/16'` blocks the metadata service
+  whatever name resolves to it.
+- A rule is only ever one class, not a pattern: `--deny 'db:*=…'` is refused, because it would
+  not reach a class granted by its own name.
+- A constrained `--allow` keeps the deny rules your profile or config set for that class.
 - A constrained `--deny` narrows whatever the profile and config granted and never grants.
 - `--allow fs` and `--allow 'fs=…'` for the same class together is an error: the first opens the
   whole ceiling, the second only one rule.
