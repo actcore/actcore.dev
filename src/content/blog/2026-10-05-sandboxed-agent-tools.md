@@ -1,31 +1,31 @@
 ---
 title: "AI agent tools run with your permissions. They don't have to."
-description: "Every MCP server you install executes with your files, your keys and the whole network. ACT packages tools as WebAssembly components with a declared capability ceiling, explicit grants and an audit trail — with a live demo: real pandas, in your browser tab, touching one file."
+description: "Every MCP server you install executes as your user, with your files and keys in reach. ACT packages tools as WebAssembly components with a declared capability ceiling, explicit grants and an audit trail. Live demo: real pandas in your browser tab, touching one file."
 pubDate: 2026-10-05
 author: actcore
 ---
 
-Every MCP server or agent tool you install today runs with your permissions:
-your SSH keys, your `.env` files, your browser cookies, the whole network. What
-it touched, you find out afterwards — if ever.
+Every MCP server or agent tool you install today runs as your user. It sees
+your SSH keys, your `.env` files, the whole network. If it misbehaves, you
+find out from the damage.
 
 **ACT** (Agent Component Tools) packages a tool as one WebAssembly component.
-The component declares what it needs — *this directory*, *these hosts* — and
-the host enforces it: anything undeclared is denied, anything declared still
-waits for your grant, and every decision lands in an audit trail. The same
-`.wasm` file is an MCP server (stdio or Streamable HTTP), a command-line tool,
-and it runs in a browser tab.
+The component declares what it needs, *this directory* and *these hosts*, and
+the host enforces it: undeclared means denied; declared still waits for your
+grant. Every decision lands in an audit trail. The same `.wasm` file is an MCP
+server (stdio or Streamable HTTP), a command-line tool, and a browser-tab app.
 
 ## Try it in your browser
 
 [actcore.dev/python](/python) is real CPython with numpy and pandas, compiled
-for WASI — not Pyodide, not Emscripten — executing your CSV inside the tab.
+for WASI (not Pyodide, not Emscripten), executing your CSV inside the tab.
 It can touch the one file you hand it and reach PyPI, nothing else. Pick the
 **escape** example: it asks the component to fetch from a non-PyPI host, and
 the policy refuses before the request leaves the page.
 
-The first run downloads ~113 MB, once. It needs JSPI: Chrome/Edge 137+ or
-Firefox 153+.
+The first run downloads ~113 MB, once, and needs JSPI: Chrome/Edge 137+ or
+Firefox 153+. Firefox ships it by default since 153; Chrome Android doesn't
+have it yet, so phones are out for now.
 
 ## Or from a terminal
 
@@ -41,8 +41,8 @@ npx @actcore/act call actpkg.dev/library/sqlite query \
 
 `act info <component>` shows what a tool can touch before it ever runs.
 Without a grant, an interactive run **asks** on first access and a headless
-one denies. Every capability decision — allow, deny, ask, and the rule that
-decided it — goes to the audit trail on stderr, independently of your logging
+one denies. Every capability decision (allow, deny, ask, and the rule that
+decided it) goes to the audit trail on stderr, independently of your logging
 setup.
 
 The grant line above is one directory. `--allow 'http=https://api.example.com'`
@@ -57,7 +57,7 @@ you named.
   engine security advisories closed.
 - **`act-build`**: embeds component metadata and pushes to any OCI registry.
   Published components are signed with keyless cosign in CI.
-- **22 components** on [actpkg.dev](https://actpkg.dev) — sqlite, postgres,
+- **22 components** on [actpkg.dev](https://actpkg.dev): sqlite, postgres,
   http-client, pdf, archive, the Python environment, browser automation over
   WebDriver BiDi, a VNC desktop.
 - Rust and Python SDKs; components in Go, C/C++, Zig, Kotlin and a few more
@@ -65,8 +65,8 @@ you named.
 
 ## What it isn't
 
-Not a VM. Isolation is WebAssembly — wasmtime in the CLI, the browser's own
-engine in the tab — plus a capability policy on top. A native MCP server has
+Not a VM. Isolation is WebAssembly (wasmtime in the CLI, the browser's own
+engine in the tab) plus a capability policy on top. A native MCP server has
 to be rebuilt as a component to get any of this; the SDKs make that a small
 change, but it is a change.
 
