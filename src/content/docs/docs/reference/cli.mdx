@@ -209,14 +209,6 @@ Commands:
 act-build init <rust|python> [name] [-o <dir>] [--http] [--fs] [--description <text>]
 ```
 
-:::caution[WIT fetch is currently broken in 0.13.0]
-`act-build init` fetches the `act:*` WIT packages as its last step, and in 0.13.0 that step panics
-(`Could not automatically determine the process-level CryptoProvider from Rustls`) on every
-language. The scaffold itself is written correctly; `wit/deps/` comes out empty, so `just build`
-fails until the dependencies are supplied. Copy them from another component, or from a checkout of
-[`act-spec`](https://github.com/actcore/act-spec/tree/main/wit), until a fix ships.
-:::
-
 Scaffolds a working component skeleton, ready for `just init && just build`. The templates are
 carried **inside the binary** — no `copier`, `uvx`, or Python toolchain is involved. Omit the name
 to scaffold into the current directory, `cargo init`-style. `--http` / `--fs` declare those

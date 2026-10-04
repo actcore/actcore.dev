@@ -78,8 +78,9 @@ rebuilding bindings.
 
 ### WasmGC guests
 
-**Kotlin** (~331 KB) and **Scala** (~561 KB) compile to WasmGC. Both work, and both require
-`act` 0.10.1 or newer, which is when the host enabled the GC proposal. Kotlin has no
+**Kotlin** (~331 KB) and **Scala** (~561 KB) compile to WasmGC. Both work on any current `act`
+release — the only requirement is a host with the GC proposal enabled, which the host has had for
+a while. Kotlin has no
 `wit-bindgen` backend at all and targets WASI 0.1, so it owns its tool logic and CBOR behind a
 minimal internal ABI with a Rust layer handling the canonical interface;
 [KT-64569](https://youtrack.jetbrains.com/issue/KT-64569) would remove that layer.
