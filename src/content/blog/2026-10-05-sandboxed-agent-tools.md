@@ -9,7 +9,7 @@ Every MCP server or agent tool you install today runs as your user. It sees
 your SSH keys, your `.env` files, the whole network. If it misbehaves, you
 find out from the damage.
 
-**ACT** (Agent Component Tools) packages a tool as one WebAssembly component.
+**ACT**, short for Agent Component Tools, packages a tool as a single WebAssembly component.
 The component declares what it needs, *this directory* and *these hosts*, and
 the host enforces it: undeclared means denied; declared still waits for your
 grant. Every decision lands in an audit trail. The same `.wasm` file is an MCP
@@ -57,7 +57,7 @@ you named.
   engine security advisories closed.
 - **`act-build`**: embeds component metadata and pushes to any OCI registry.
   Published components are signed with keyless cosign in CI.
-- **22 components** on [actpkg.dev](https://actpkg.dev): sqlite, postgres,
+- **23 components** on [actpkg.dev](https://actpkg.dev): sqlite, postgres,
   http-client, pdf, archive, the Python environment, browser automation over
   WebDriver BiDi, a VNC desktop.
 - Rust and Python SDKs; components in Go, C/C++, Zig, Kotlin and a few more
