@@ -79,10 +79,10 @@ You need a Rust or Python toolchain depending on which SDK you use.
 <Tabs syncKey="lang">
 <TabItem label="Rust">
 ```bash
-rustup toolchain install nightly
-rustup target add wasm32-wasip2 --toolchain nightly
+rustup target add wasm32-wasip3
 ```
-Components pin the toolchain with `rust-toolchain.toml`; you don't need `+nightly` flags day-to-day.
+Components pin the toolchain with `rust-toolchain.toml` (stable — wasip3 is a tier-2 target since
+Rust 1.100); you don't install anything else by hand.
 </TabItem>
 <TabItem label="Python">
 ```bash

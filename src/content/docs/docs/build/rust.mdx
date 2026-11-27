@@ -15,7 +15,7 @@ just init
 toolchain involved. Pass `--http` / `--fs` to have it declare those capabilities in `act.toml`
 for you.
 
-The template sets up `Cargo.toml` with a current [`act-sdk`](https://crates.io/crates/act-sdk), a `wit/` directory tracking [`act:tools`](https://github.com/actcore/act-spec/blob/main/wit/act-tools/act-tools.wit) (and [`act:sessions`](https://github.com/actcore/act-spec/blob/main/wit/act-sessions/act-sessions.wit) for stateful components) over [`act:core`](https://github.com/actcore/act-spec/blob/main/wit/act-core/act-core.wit), a `rust-toolchain.toml` pinning nightly + `wasm32-wasip2`, and a `justfile` with `build` / `test` / `publish` recipes.
+The template sets up `Cargo.toml` with a current [`act-sdk`](https://crates.io/crates/act-sdk), a `wit/` directory tracking [`act:tools`](https://github.com/actcore/act-spec/blob/main/wit/act-tools/act-tools.wit) (and [`act:sessions`](https://github.com/actcore/act-spec/blob/main/wit/act-sessions/act-sessions.wit) for stateful components) over [`act:core`](https://github.com/actcore/act-spec/blob/main/wit/act-core/act-core.wit), a `rust-toolchain.toml` pinning stable + `wasm32-wasip3`, and a `justfile` with `build` / `test` / `publish` recipes.
 
 ## Write a tool
 
@@ -47,13 +47,13 @@ just build
 ```
 
 This runs:
-1. `cargo build --release` → `target/wasm32-wasip2/release/<name>.wasm`
+1. `cargo build --release` → `target/wasm32-wasip3/release/<name>.wasm`
 2. `act-build pack <name>.wasm` → embeds the `act:component` custom section (CBOR-encoded metadata) and the contents of `skill/` as an Agent Skill tar.
 
 ## Verify
 
 ```bash
-act info target/wasm32-wasip2/release/component_my_component.wasm --tools
+act info target/wasm32-wasip3/release/component_my_component.wasm --tools
 ```
 
 Should print your component name, version, and the `reverse` tool with its auto-derived schema.

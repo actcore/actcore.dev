@@ -169,7 +169,7 @@ a component cannot write to its own audit record.
 | Status | Shipped (delegated to OCI registry) |
 | ACT capability | Immutable OCI tags; content-addressable retrieval by digest |
 
-Components are referenced by `actpkg.dev/library/<name>:<version>` and resolvable by digest (`@sha256:...`). The host caches pulled components by reference at `~/.cache/act/components/`, so the running artifact is always traceable to a registry-tagged version.
+Components are referenced by `actpkg.dev/library/<name>:<version>` and resolvable by digest (`@sha256:...`). The host keeps pulled components in its store (`~/.local/share/act/store` by default, `ACT_STORE_DIR` overrides), so the running artifact is always traceable to a registry-tagged version.
 
 ## Advanced
 

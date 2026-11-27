@@ -124,14 +124,14 @@ An unpacked `.wasm` carries no `act:component` section, so it declares no ceilin
 everything is outside it. `cargo build` alone is not enough:
 
 ```bash
-act-build pack target/wasm32-wasip2/release/<name>.wasm
+act-build pack target/wasm32-wasip3/release/<name>.wasm
 act inspect component-manifest <name>.wasm | jq -r .std.name   # "" or missing → still unpacked
 ```
 
 **`resolving <ref> … dns error` / `client error (Connect)`**
 
 A network failure reaching the registry, not a policy denial. Retry; if it persists, check that the
-reference is right — a component pulled once is cached in `~/.cache/act/components/` and later runs
+reference is right — a component pulled once is cached in the component store (`~/.local/share/act/store` by default, `ACT_STORE_DIR` overrides) and later runs
 skip the network entirely (`act store list`).
 
 ## Turning the noise down

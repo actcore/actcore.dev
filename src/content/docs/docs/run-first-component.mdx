@@ -130,7 +130,7 @@ them at session open. See [`act secret`](/docs/reference/cli/#act-secret).
 
 ## Where did the `.wasm` go?
 
-`act` cached it to `~/.cache/act/components/`. Subsequent runs skip the network. `act store list`
+`act` cached it to the component store (`~/.local/share/act/store` by default, `ACT_STORE_DIR` overrides). Subsequent runs skip the network. `act store list`
 shows what's cached, `act store gc` prunes it.
 
 ## Why did the command need a grant?

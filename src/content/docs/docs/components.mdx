@@ -3,7 +3,7 @@ title: Published components
 description: What is available to run today, grouped by what it is for — and how to find out what any component will ask for before you run it.
 ---
 
-Twenty-three components are published to **[actpkg.dev/library](https://actpkg.dev)**, signed in CI
+Twenty-four components are published to **[actpkg.dev/library](https://actpkg.dev)**, signed in CI
 with keyless cosign. The registry is the source of truth for versions and digests; this page is
 about which one you want.
 
@@ -58,6 +58,11 @@ service. These are stateful — the parsed spec or the upstream handshake lives 
 
 `act-http-bridge` is also published but **deprecated**: it fronted the REST binding, which no
 longer exists. It stays buildable so nothing breaks; do not start anything new on it.
+
+**Browser engine** — `servo`
+
+A real Servo build running as a component: render a page, in a sandbox. The heaviest artifact in
+the registry, and the clearest demonstration that the ceiling does not care how large the guest is.
 
 **Utilities** — `barcode`, `crypto`, `encoding`, `random`, `time`, `openwallet`
 

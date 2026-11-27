@@ -22,7 +22,7 @@ Commands:
   completions  Print a shell completion script on stdout
 ```
 
-All subcommands that take a component accept three reference forms: a local path, an HTTP(S) URL, or an OCI registry ref (e.g. `actpkg.dev/library/sqlite:latest`). Remote components are cached in `~/.cache/act/components/`.
+All subcommands that take a component accept three reference forms: a local path, an HTTP(S) URL, or an OCI registry ref (e.g. `actpkg.dev/library/sqlite:latest`). Remote components are cached in the component store (`~/.local/share/act/store` by default, `ACT_STORE_DIR` overrides).
 
 ### Common flags
 
@@ -126,9 +126,9 @@ act store update [<ref>]
 act store gc
 ```
 
-Manages the local component store under `~/.cache/act/components/`. `update` re-resolves stored
+Manages the local component store under the component store (`~/.local/share/act/store` by default, `ACT_STORE_DIR` overrides). `update` re-resolves stored
 components and re-pulls any whose digest moved — omit the ref to update everything. `gc` deletes
-blobs no longer referenced by any component.
+blobs no longer referenced by any component. Cranelift's compiled artifacts are cached separately in the platform cache dir (`~/.cache/act/wasmtime` on Linux, `ACT_WASMTIME_CACHE_DIR` overrides) so a component is compiled once per machine rather than once per process — a failed cache only costs compile time.
 
 ### `act inspect`
 
